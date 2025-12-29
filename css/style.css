@@ -1,0 +1,535 @@
+/* Time-Table Management System - Custom Styles */
+
+/* General Styles */
+:root {
+    --primary-color: #4361ee;
+    --secondary-color: #3f37c9;
+    --success-color: #4cc9f0;
+    --danger-color: #f72585;
+    --warning-color: #f4a261;
+    --dark-color: #1a1a2e;
+    --light-color: #f8f9fa;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f0f2f5;
+    min-height: 100vh;
+}
+
+/* Login Page Styles */
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+}
+
+.login-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    padding: 40px;
+    width: 100%;
+    max-width: 420px;
+}
+
+.login-card h1 {
+    color: var(--dark-color);
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.login-card .subtitle {
+    color: #6c757d;
+    margin-bottom: 32px;
+}
+
+.login-card .form-control {
+    border-radius: 8px;
+    padding: 12px 16px;
+    border: 2px solid #e9ecef;
+    transition: border-color 0.2s;
+}
+
+.login-card .form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+}
+
+.login-card .btn-primary {
+    background: var(--primary-color);
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.login-card .btn-primary:hover {
+    background: var(--secondary-color);
+}
+
+/* Dashboard Layout */
+.dashboard-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 250px;
+    background: var(--dark-color);
+    color: white;
+    padding: 20px 0;
+    position: fixed;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.sidebar .brand {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 20px;
+}
+
+.sidebar .brand h4 {
+    margin: 0;
+    font-weight: 700;
+}
+
+.sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.7);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s;
+}
+
+.sidebar .nav-link:hover,
+.sidebar .nav-link.active {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar .nav-link i {
+    width: 20px;
+    text-align: center;
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 250px;
+    padding: 24px;
+}
+
+/* Top Navbar */
+.top-navbar {
+    background: white;
+    padding: 16px 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.top-navbar h5 {
+    margin: 0;
+    font-weight: 600;
+}
+
+/* Cards */
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    height: 100%;
+}
+
+.stat-card .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 16px;
+}
+
+.stat-card .stat-icon.classes { background: #e8f4fd; color: #3498db; }
+.stat-card .stat-icon.rooms { background: #e8fdf4; color: #2ecc71; }
+.stat-card .stat-icon.teachers { background: #fdf4e8; color: #f39c12; }
+.stat-card .stat-icon.subjects { background: #f4e8fd; color: #9b59b6; }
+
+.stat-card h3 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.stat-card p {
+    color: #6c757d;
+    margin: 0;
+}
+
+/* Content Card */
+.content-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.content-card .card-header {
+    background: white;
+    border-bottom: 1px solid #e9ecef;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.content-card .card-header h5 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.content-card .card-body {
+    padding: 24px;
+}
+
+/* Tables */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th {
+    background: #f8f9fa;
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.data-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: middle;
+}
+
+.data-table tr:hover {
+    background: #f8f9fa;
+}
+
+.data-table .actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Timetable Grid */
+.timetable-container {
+    overflow-x: auto;
+}
+
+.timetable {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+}
+
+.timetable th,
+.timetable td {
+    border: 1px solid #e9ecef;
+    padding: 12px;
+    text-align: center;
+    min-width: 120px;
+}
+
+.timetable th {
+    background: var(--primary-color);
+    color: white;
+    font-weight: 600;
+}
+
+.timetable th.period-header {
+    background: var(--secondary-color);
+}
+
+.timetable td.day-header {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.timetable .slot-cell {
+    background: white;
+    transition: background 0.2s;
+    vertical-align: top;
+    height: 80px;
+}
+
+.timetable .slot-cell:hover {
+    background: #f0f7ff;
+}
+
+.timetable .slot-cell .subject {
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 4px;
+}
+
+.timetable .slot-cell .teacher {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.timetable .slot-cell .room {
+    font-size: 11px;
+    color: #adb5bd;
+}
+
+.timetable .slot-cell.empty {
+    background: #f8f9fa;
+    color: #adb5bd;
+}
+
+/* Break cells in timetable */
+.timetable th.break-header {
+    background: #f4a261;
+    color: white;
+    min-width: 80px;
+}
+
+.timetable .slot-cell.break-cell {
+    background: linear-gradient(135deg, #fef3e2 0%, #fed7aa 100%);
+    vertical-align: middle;
+}
+
+.timetable .slot-cell.break-cell .break-label {
+    color: #9a3412;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* Practical cells in timetable */
+.timetable .slot-cell.practical-cell {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    border-left: 3px solid #10b981;
+}
+
+.timetable .slot-cell.practical-cell .subject {
+    color: #047857;
+}
+
+.timetable .slot-cell.practical-cell:hover {
+    background: linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%);
+}
+
+/* Form Styles */
+.form-section {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.form-section h5 {
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+/* Buttons */
+.btn-action {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.btn-generate {
+    background: linear-gradient(135deg, var(--success-color), #4895ef);
+    border: none;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-generate:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 201, 240, 0.4);
+    color: white;
+}
+
+/* Alerts */
+.alert-floating {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1050;
+    min-width: 300px;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Tabs */
+.nav-tabs-custom {
+    border: none;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.nav-tabs-custom .nav-link {
+    border: none;
+    background: white;
+    color: #495057;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.nav-tabs-custom .nav-link:hover {
+    background: #e9ecef;
+}
+
+.nav-tabs-custom .nav-link.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: none;
+    text-align: center;
+    padding: 40px;
+}
+
+.loading-spinner.show {
+    display: block;
+}
+
+/* User Info */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .sidebar {
+        width: 70px;
+        padding: 20px 0;
+    }
+
+    .sidebar .brand h4,
+    .sidebar .nav-link span {
+        display: none;
+    }
+
+    .sidebar .nav-link {
+        justify-content: center;
+        padding: 16px;
+    }
+
+    .main-content {
+        margin-left: 70px;
+    }
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        display: none;
+    }
+
+    .main-content {
+        margin-left: 0;
+    }
+
+    .stat-card {
+        margin-bottom: 16px;
+    }
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+}
+
+.empty-state i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-state h5 {
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+/* Badge */
+.badge-role {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.badge-admin { background: #fee2e2; color: #dc2626; }
+.badge-faculty { background: #dbeafe; color: #2563eb; }
+.badge-student { background: #d1fae5; color: #059669; }
+
+/* Timetable Summary Cards */
+.timetable-summary-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid #e9ecef;
+}
+
+.timetable-summary-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    border-color: var(--primary-color);
+}
+
+.timetable-summary-card .card-title {
+    color: #1a1a2e;
+    font-weight: 600;
+}
+
+.timetable-summary-card .card-footer {
+    border-top: 1px solid #e9ecef;
+}

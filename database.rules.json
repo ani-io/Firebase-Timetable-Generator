@@ -1,0 +1,71 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+
+    "users": {
+      "$uid": {
+        ".read": "auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        ".write": "auth.uid === $uid || !data.exists()"
+      }
+    },
+
+    "teachers": {
+      ".read": "auth != null",
+      "$teacherId": {
+        ".write": "auth != null"
+      }
+    },
+
+    "students": {
+      ".read": "auth != null",
+      "$studentId": {
+        ".write": "auth != null"
+      }
+    },
+
+    "classes": {
+      ".read": "auth != null",
+      "$classId": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
+    "rooms": {
+      ".read": "auth != null",
+      "$roomId": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
+    "subjects": {
+      ".read": "auth != null",
+      "$subjectId": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
+    "slots": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    "timetables": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    "notices": {
+      ".read": "auth != null",
+      "$noticeId": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'faculty')",
+        ".validate": "newData.hasChildren(['title', 'content', 'priority', 'audience', 'authorId', 'authorName', 'authorRole', 'createdAt'])"
+      }
+    },
+
+    "counters": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
