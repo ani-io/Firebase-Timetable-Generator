@@ -298,6 +298,7 @@
 
     <!-- App Scripts -->
     <script src="js/firebase-config.js"></script>
+    <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
 
     <!-- Bootstrap JS -->
@@ -306,8 +307,8 @@
     <script>
         let selectedRole = null;
 
-        // Admin access code (in production, this should be validated server-side)
-        const ADMIN_ACCESS_CODE = 'ADMIN2024';
+        // Admin access code - read from config.js (change it there)
+        const ADMIN_ACCESS_CODE = APP_CONFIG?.adminAccessCode || 'ADMIN2024';
 
         // Generate unique ID based on role and department
         async function generateUniqueId(role, dept) {

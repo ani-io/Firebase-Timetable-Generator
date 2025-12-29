@@ -155,6 +155,10 @@ async function generateTimetable() {
                         if (teacherSlotMap[teacherId]?.[slotId]) valid = false;
                         if (labRoomId && roomSlotMap[labRoomId]?.[slotId]) valid = false;
 
+                        // Check teacher's unavailable slots
+                        const teacherInfo = teachers[teacherId];
+                        if (teacherInfo?.unavailableSlots?.includes(slotId)) valid = false;
+
                         if (valid) consecutive.push([slotId, slotData]);
                     }
 
@@ -323,6 +327,9 @@ async function generateTimetable() {
                     // Check if teacher is free
                     if (teacherSlotMap[teacherId]?.[slotId]) continue;
 
+                    // Check teacher's unavailable slots
+                    if (teacherData?.unavailableSlots?.includes(slotId)) continue;
+
                     // Find available classroom (not lab)
                     let assignedRoom = null;
                     for (const [roomId, roomData] of classrooms) {
@@ -389,11 +396,32 @@ async function generateTimetable() {
         // Save to database
         log('\nSaving timetable to database...');
 
-        // Clear existing and save new
+        // Clear existing and save new with draft status
         if (selectedClass) {
-            await database.ref(`timetables/${selectedClass}`).set(timetableEntries[selectedClass] || {});
+            const timetableData = timetableEntries[selectedClass] || {};
+            timetableData.status = 'draft';
+            timetableData.updatedAt = Date.now();
+            timetableData.createdBy = auth.currentUser?.uid;
+            await database.ref(`timetables/${selectedClass}`).set(timetableData);
+
+            // Show draft/publish buttons
+            if (typeof showTimetableActions === 'function') {
+                showTimetableActions(selectedClass, timetableData);
+            }
         } else {
+            // Add status to all timetables
+            Object.keys(timetableEntries).forEach(classId => {
+                timetableEntries[classId].status = 'draft';
+                timetableEntries[classId].updatedAt = Date.now();
+                timetableEntries[classId].createdBy = auth.currentUser?.uid;
+            });
             await database.ref('timetables').set(timetableEntries);
+
+            // Show buttons for first class
+            const firstClass = Object.keys(targetClasses)[0];
+            if (typeof showTimetableActions === 'function' && firstClass) {
+                showTimetableActions(firstClass, timetableEntries[firstClass]);
+            }
         }
 
         log('Timetable saved successfully!');
@@ -412,6 +440,16 @@ async function generateTimetable() {
         // Show log
         logContainer.style.display = 'block';
         logContent.textContent = logs.join('\n');
+
+        // Show AI analyze button
+        if (typeof showAIAnalyzeButton === 'function') {
+            showAIAnalyzeButton();
+        }
+
+        // Reload saved timetables list
+        if (typeof loadSavedTimetables === 'function') {
+            loadSavedTimetables();
+        }
 
         showToast(
             unassigned.length > 0

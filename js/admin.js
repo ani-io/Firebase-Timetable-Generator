@@ -1,6 +1,7 @@
 // Admin Dashboard Logic
 
 // Data cache
+let batchesData = {};
 let classesData = {};
 let roomsData = {};
 let teachersData = {};
@@ -22,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Setup forms
         setupForms();
+        setupBatchForm();
         setupNoticeForm();
 
         // Load all data
@@ -72,22 +74,34 @@ function showSection(sectionName) {
     // Update page title
     const titles = {
         dashboard: 'Dashboard',
+        batches: 'Batch Management',
         classes: 'Class Management',
         rooms: 'Room Management',
         teachers: 'Teacher Management',
         subjects: 'Subject Management',
         slots: 'Time Slot Management',
         timetable: 'Timetable Generator',
-        notices: 'Notice Board'
+        notices: 'Notice Board',
+        reports: 'Progress Reports',
+        lectureRecords: 'Lecture Records',
+        aiSettings: 'AI Settings'
     };
     document.getElementById('pageTitle').textContent = titles[sectionName] || 'Dashboard';
 
-    // Load dropdowns for subjects/timetable sections
-    if (sectionName === 'subjects') {
+    // Load dropdowns for various sections
+    if (sectionName === 'classes') {
+        populateClassBatchDropdown();
+    } else if (sectionName === 'subjects') {
         populateSubjectDropdowns();
     } else if (sectionName === 'timetable') {
         populateTimetableDropdown();
         loadExistingTimetables();
+    } else if (sectionName === 'reports') {
+        populateReportFilters();
+        loadReports();
+    } else if (sectionName === 'lectureRecords') {
+        populateRecordsFilters();
+        loadLectureRecords(); // Auto-load all records
     }
 }
 
@@ -121,6 +135,7 @@ function setupForms() {
 // Load all data
 async function loadAllData() {
     await Promise.all([
+        loadBatches(),
         loadClasses(),
         loadRooms(),
         loadTeachers(),
@@ -133,6 +148,14 @@ async function loadAllData() {
 // Real-time listeners
 function setupRealtimeListeners() {
     console.log('Setting up real-time database listeners...');
+
+    database.ref('batches').on('value', (snapshot) => {
+        batchesData = snapshot.val() || {};
+        console.log('Batches data updated:', Object.keys(batchesData).length, 'items');
+        renderBatchesTable();
+    }, (error) => {
+        console.error('Error listening to batches:', error);
+    });
 
     database.ref('classes').on('value', (snapshot) => {
         classesData = snapshot.val() || {};
@@ -189,6 +212,185 @@ function updateDashboardStats() {
     document.getElementById('subjectCount').textContent = Object.keys(subjectsData).length;
 }
 
+// ==================== BATCH OPERATIONS ====================
+
+// Setup batch form
+function setupBatchForm() {
+    const form = document.getElementById('batchForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await addBatch();
+        });
+    }
+
+    // Auto-generate batch name when fields change
+    const yearSelect = document.getElementById('batchAcademicYear');
+    const branchInput = document.getElementById('batchBranch');
+    const semesterSelect = document.getElementById('batchSemester');
+    const nameInput = document.getElementById('batchName');
+
+    const updateBatchName = () => {
+        const year = yearSelect.value;
+        const branch = branchInput.value.trim();
+        const semester = semesterSelect.value;
+
+        if (year && branch && semester) {
+            // Generate short name: FY-CE-SEM8
+            const yearShort = year.split(' ').map(w => w[0]).join('');
+            const branchShort = branch.split(' ').map(w => w[0]).join('').toUpperCase();
+            nameInput.value = `${yearShort}-${branchShort}-SEM${semester}`;
+        } else {
+            nameInput.value = '';
+        }
+    };
+
+    if (yearSelect) yearSelect.addEventListener('change', updateBatchName);
+    if (branchInput) branchInput.addEventListener('input', updateBatchName);
+    if (semesterSelect) semesterSelect.addEventListener('change', updateBatchName);
+}
+
+async function loadBatches() {
+    const snapshot = await database.ref('batches').once('value');
+    batchesData = snapshot.val() || {};
+    renderBatchesTable();
+}
+
+function renderBatchesTable() {
+    const tbody = document.getElementById('batchesTableBody');
+    if (!tbody) return;
+
+    const batches = Object.entries(batchesData);
+
+    if (batches.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No batches added yet</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = batches.map(([id, data]) => `
+        <tr>
+            <td><strong>${id}</strong></td>
+            <td>${data.name}</td>
+            <td>${data.academicYear}</td>
+            <td>${data.branch}</td>
+            <td>Semester ${data.semester}</td>
+            <td class="actions">
+                <button class="btn btn-sm btn-outline-primary btn-action" onclick="editBatch('${id}')">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteBatch('${id}')">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function addBatch() {
+    const academicYear = document.getElementById('batchAcademicYear').value;
+    const branch = document.getElementById('batchBranch').value.trim();
+    const semester = document.getElementById('batchSemester').value;
+    const name = document.getElementById('batchName').value.trim();
+
+    // Generate batch ID
+    const batchId = 'BATCH-' + Date.now();
+
+    const batchData = {
+        academicYear,
+        branch,
+        semester,
+        name,
+        createdAt: new Date().toISOString(),
+        createdBy: auth.currentUser.uid
+    };
+
+    console.log('Attempting to add batch:', batchData);
+
+    try {
+        await database.ref(`batches/${batchId}`).set(batchData);
+        console.log('Batch added successfully:', batchId);
+        showToast('Batch added successfully!', 'success');
+        document.getElementById('batchForm').reset();
+        document.getElementById('batchName').value = '';
+    } catch (error) {
+        console.error('Error adding batch:', error);
+        showToast('Error adding batch: ' + error.message, 'danger');
+    }
+}
+
+function editBatch(batchId) {
+    const data = batchesData[batchId];
+
+    const yearOptions = ['First Year', 'Second Year', 'Third Year', 'Final Year'].map(year =>
+        `<option value="${year}" ${data.academicYear === year ? 'selected' : ''}>${year}</option>`
+    ).join('');
+
+    const semesterOptions = [1, 2, 3, 4, 5, 6, 7, 8].map(sem =>
+        `<option value="${sem}" ${data.semester == sem ? 'selected' : ''}>Semester ${sem}</option>`
+    ).join('');
+
+    showEditModal('Edit Batch', `
+        <div class="mb-3">
+            <label class="form-label">Batch ID</label>
+            <input type="text" class="form-control" id="editBatchId" value="${batchId}" readonly>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Academic Year</label>
+            <select class="form-select" id="editBatchAcademicYear" required>
+                <option value="">Select Year</option>
+                ${yearOptions}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Branch</label>
+            <input type="text" class="form-control" id="editBatchBranch" value="${data.branch}" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Semester</label>
+            <select class="form-select" id="editBatchSemester" required>
+                <option value="">Select Semester</option>
+                ${semesterOptions}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Batch Name</label>
+            <input type="text" class="form-control" id="editBatchName" value="${data.name}" required>
+        </div>
+    `, async () => {
+        const academicYear = document.getElementById('editBatchAcademicYear').value;
+        const branch = document.getElementById('editBatchBranch').value.trim();
+        const semester = document.getElementById('editBatchSemester').value;
+        const name = document.getElementById('editBatchName').value.trim();
+
+        await database.ref(`batches/${batchId}`).update({
+            academicYear, branch, semester, name
+        });
+        showToast('Batch updated successfully!', 'success');
+    });
+}
+
+async function deleteBatch(batchId) {
+    if (confirm(`Are you sure you want to delete batch "${batchId}"? This will not delete associated classes.`)) {
+        try {
+            await database.ref(`batches/${batchId}`).remove();
+            showToast('Batch deleted successfully!', 'success');
+        } catch (error) {
+            showToast('Error deleting batch: ' + error.message, 'danger');
+        }
+    }
+}
+
+// Populate batch dropdown in class form
+function populateClassBatchDropdown() {
+    const select = document.getElementById('classBatch');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Select Batch (Optional)</option>';
+    Object.entries(batchesData).forEach(([id, data]) => {
+        select.innerHTML += `<option value="${id}">${data.name} (${data.academicYear})</option>`;
+    });
+}
+
 // ==================== CLASS OPERATIONS ====================
 
 async function loadClasses() {
@@ -202,36 +404,48 @@ function renderClassesTable() {
     const classes = Object.entries(classesData);
 
     if (classes.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No classes added yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No classes added yet</td></tr>';
         return;
     }
 
-    tbody.innerHTML = classes.map(([id, data]) => `
-        <tr>
-            <td><strong>${id}</strong></td>
-            <td>${data.name}</td>
-            <td>${data.dept}</td>
-            <td class="actions">
-                <button class="btn btn-sm btn-outline-primary btn-action" onclick="editClass('${id}')">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteClass('${id}')">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = classes.map(([id, data]) => {
+        const batchName = data.batchId && batchesData[data.batchId]
+            ? batchesData[data.batchId].name
+            : '<span class="text-muted">-</span>';
+        return `
+            <tr>
+                <td><strong>${id}</strong></td>
+                <td>${data.name}</td>
+                <td>${batchName}</td>
+                <td>${data.dept}</td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-outline-primary btn-action" onclick="editClass('${id}')">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteClass('${id}')">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 async function addClass() {
     const classId = document.getElementById('classId').value.trim();
     const name = document.getElementById('className').value.trim();
     const dept = document.getElementById('classDept').value.trim();
+    const batchId = document.getElementById('classBatch').value || null;
 
-    console.log('Attempting to add class:', { classId, name, dept });
+    console.log('Attempting to add class:', { classId, name, dept, batchId });
+
+    const classData = { name, dept };
+    if (batchId) {
+        classData.batchId = batchId;
+    }
 
     try {
-        await database.ref(`classes/${classId}`).set({ name, dept });
+        await database.ref(`classes/${classId}`).set(classData);
         console.log('Class added successfully:', classId);
         showToast('Class added successfully!', 'success');
         document.getElementById('classForm').reset();
@@ -252,10 +466,22 @@ function editClass(classId) {
         `<option value="${dept}" ${data.dept === dept ? 'selected' : ''}>${dept}</option>`
     ).join('');
 
+    // Build batch options
+    const batchOptions = Object.entries(batchesData).map(([id, batch]) =>
+        `<option value="${id}" ${data.batchId === id ? 'selected' : ''}>${batch.name} (${batch.academicYear})</option>`
+    ).join('');
+
     showEditModal('Edit Class', `
         <div class="mb-3">
             <label class="form-label">Class ID</label>
             <input type="text" class="form-control" id="editClassId" value="${classId}" readonly>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Batch</label>
+            <select class="form-select" id="editClassBatch">
+                <option value="">No Batch</option>
+                ${batchOptions}
+            </select>
         </div>
         <div class="mb-3">
             <label class="form-label">Class Name</label>
@@ -271,7 +497,8 @@ function editClass(classId) {
     `, async () => {
         const name = document.getElementById('editClassName').value.trim();
         const dept = document.getElementById('editClassDept').value;
-        await database.ref(`classes/${classId}`).update({ name, dept });
+        const batchId = document.getElementById('editClassBatch').value || null;
+        await database.ref(`classes/${classId}`).update({ name, dept, batchId });
         showToast('Class updated successfully!', 'success');
     });
 }
@@ -400,26 +627,40 @@ function renderTeachersTable() {
     const teachers = Object.entries(teachersData);
 
     if (teachers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No teachers added yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No teachers added yet</td></tr>';
         return;
     }
 
-    tbody.innerHTML = teachers.map(([id, data]) => `
-        <tr>
-            <td><strong>${id}</strong></td>
-            <td>${data.name}</td>
-            <td>${data.email}</td>
-            <td>${data.dept}</td>
-            <td class="actions">
-                <button class="btn btn-sm btn-outline-primary btn-action" onclick="editTeacher('${id}')">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteTeacher('${id}')">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = teachers.map(([id, data]) => {
+        const unavailableCount = (data.unavailableSlots || []).length;
+        const availabilityBadge = unavailableCount > 0
+            ? `<span class="badge bg-warning text-dark">${unavailableCount} blocked</span>`
+            : '<span class="badge bg-success">Full</span>';
+
+        return `
+            <tr>
+                <td><strong>${id}</strong></td>
+                <td>${data.name}</td>
+                <td>${data.email}</td>
+                <td>${data.dept}</td>
+                <td>${data.maxHoursPerWeek || 20} hrs</td>
+                <td>
+                    ${availabilityBadge}
+                    <button class="btn btn-sm btn-outline-info ms-1" onclick="openAvailabilityModal('${id}')" title="Manage Availability">
+                        <i class="bi bi-calendar-check"></i>
+                    </button>
+                </td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-outline-primary btn-action" onclick="editTeacher('${id}')">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteTeacher('${id}')">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 async function addTeacher() {
@@ -427,11 +668,18 @@ async function addTeacher() {
     const name = document.getElementById('teacherName').value.trim();
     const email = document.getElementById('teacherEmail').value.trim();
     const dept = document.getElementById('teacherDept').value.trim();
+    const maxHoursPerWeek = parseInt(document.getElementById('teacherMaxHours').value) || 20;
 
-    console.log('Attempting to add teacher:', { teacherId, name, email, dept });
+    console.log('Attempting to add teacher:', { teacherId, name, email, dept, maxHoursPerWeek });
 
     try {
-        await database.ref(`teachers/${teacherId}`).set({ name, email, dept });
+        await database.ref(`teachers/${teacherId}`).set({
+            name,
+            email,
+            dept,
+            maxHoursPerWeek,
+            unavailableSlots: []
+        });
         console.log('Teacher added successfully:', teacherId);
         showToast('Teacher added successfully!', 'success');
         document.getElementById('teacherForm').reset();
@@ -472,11 +720,16 @@ function editTeacher(teacherId) {
                 ${deptOptions}
             </select>
         </div>
+        <div class="mb-3">
+            <label class="form-label">Max Hours Per Week</label>
+            <input type="number" class="form-control" id="editTeacherMaxHours" value="${data.maxHoursPerWeek || 20}" min="1" max="40">
+        </div>
     `, async () => {
         const name = document.getElementById('editTeacherName').value.trim();
         const email = document.getElementById('editTeacherEmail').value.trim();
         const dept = document.getElementById('editTeacherDept').value;
-        await database.ref(`teachers/${teacherId}`).update({ name, email, dept });
+        const maxHoursPerWeek = parseInt(document.getElementById('editTeacherMaxHours').value) || 20;
+        await database.ref(`teachers/${teacherId}`).update({ name, email, dept, maxHoursPerWeek });
         showToast('Teacher updated successfully!', 'success');
     });
 }
@@ -505,7 +758,7 @@ function renderSubjectsTable() {
     const subjects = Object.entries(subjectsData);
 
     if (subjects.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No subjects added yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No subjects added yet</td></tr>';
         return;
     }
 
@@ -519,14 +772,30 @@ function renderSubjectsTable() {
         const sessions = subjectType === 'practical'
             ? `${data.lecturesPerWeek} (${data.practicalDuration || 2}h each)`
             : data.lecturesPerWeek;
+
+        // Progress calculation (completed will be calculated from lectureRecords)
+        const totalLectures = data.totalLectures || 0;
+        const completedLectures = data.completedLectures || 0;
+        const progressPercent = totalLectures > 0 ? Math.round((completedLectures / totalLectures) * 100) : 0;
+        const progressColor = progressPercent >= 75 ? 'success' : progressPercent >= 50 ? 'warning' : 'danger';
+
         return `
             <tr>
-                <td><strong>${id}</strong></td>
+                <td><strong>${data.code || id}</strong></td>
                 <td>${data.name}</td>
                 <td>${typeLabel}</td>
                 <td>${className}</td>
                 <td>${teacherName}</td>
                 <td>${sessions}</td>
+                <td>
+                    <div class="progress" style="height: 20px; min-width: 100px;">
+                        <div class="progress-bar bg-${progressColor}" role="progressbar"
+                             style="width: ${progressPercent}%;"
+                             aria-valuenow="${progressPercent}" aria-valuemin="0" aria-valuemax="100">
+                            ${completedLectures}/${totalLectures}
+                        </div>
+                    </div>
+                </td>
                 <td class="actions">
                     <button class="btn btn-sm btn-outline-primary btn-action" onclick="editSubject('${id}')">
                         <i class="bi bi-pencil"></i>
@@ -578,18 +847,23 @@ function togglePracticalFields() {
 
 async function addSubject() {
     const subjectId = document.getElementById('subjectId').value.trim();
+    const code = document.getElementById('subjectCode').value.trim();
     const name = document.getElementById('subjectName').value.trim();
     const subjectType = document.getElementById('subjectType').value;
     const classId = document.getElementById('subjectClass').value;
     const teacherId = document.getElementById('subjectTeacher').value;
     const lecturesPerWeek = parseInt(document.getElementById('lecturesPerWeek').value);
+    const totalLectures = parseInt(document.getElementById('totalLectures').value);
 
     const subjectData = {
+        code,
         name,
         type: subjectType,
         classId,
         teacherId,
-        lecturesPerWeek
+        lecturesPerWeek,
+        totalLectures,
+        completedLectures: 0
     };
 
     // Add practical-specific fields
@@ -641,6 +915,10 @@ function editSubject(subjectId) {
             <input type="text" class="form-control" id="editSubjectId" value="${subjectId}" readonly>
         </div>
         <div class="mb-3">
+            <label class="form-label">Subject Code</label>
+            <input type="text" class="form-control" id="editSubjectCode" value="${data.code || ''}" required>
+        </div>
+        <div class="mb-3">
             <label class="form-label">Subject Name</label>
             <input type="text" class="form-control" id="editSubjectName" value="${data.name}" required>
         </div>
@@ -665,9 +943,15 @@ function editSubject(subjectId) {
                 ${teacherOptions}
             </select>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Sessions Per Week</label>
-            <input type="number" class="form-control" id="editLecturesPerWeek" value="${data.lecturesPerWeek}" min="1" max="10" required>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Sessions Per Week</label>
+                <input type="number" class="form-control" id="editLecturesPerWeek" value="${data.lecturesPerWeek}" min="1" max="10" required>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Total Lectures (Syllabus)</label>
+                <input type="number" class="form-control" id="editTotalLectures" value="${data.totalLectures || 0}" min="1" max="100" required>
+            </div>
         </div>
         <div id="editPracticalFields" style="display: ${subjectType === 'practical' ? 'block' : 'none'};">
             <div class="mb-3">
@@ -686,13 +970,15 @@ function editSubject(subjectId) {
             </div>
         </div>
     `, async () => {
+        const code = document.getElementById('editSubjectCode').value.trim();
         const name = document.getElementById('editSubjectName').value.trim();
         const type = document.getElementById('editSubjectType').value;
         const classId = document.getElementById('editSubjectClass').value;
         const teacherId = document.getElementById('editSubjectTeacher').value;
         const lecturesPerWeek = parseInt(document.getElementById('editLecturesPerWeek').value);
+        const totalLectures = parseInt(document.getElementById('editTotalLectures').value);
 
-        const updateData = { name, type, classId, teacherId, lecturesPerWeek };
+        const updateData = { code, name, type, classId, teacherId, lecturesPerWeek, totalLectures };
 
         if (type === 'practical') {
             updateData.labRoomId = document.getElementById('editLabRoom').value || null;
@@ -889,7 +1175,12 @@ async function loadExistingTimetables() {
 
         for (const classId of timetableClasses) {
             const classData = classesData[classId] || { name: classId };
-            const entryCount = Object.keys(timetables[classId] || {}).length;
+            const timetableInfo = timetables[classId] || {};
+            const entryCount = Object.keys(timetableInfo).filter(k => !['status', 'updatedAt', 'publishedAt', 'createdBy', 'updatedBy', 'publishedBy'].includes(k)).length;
+            const status = timetableInfo.status || 'draft';
+            const statusBadge = status === 'published'
+                ? '<span class="badge bg-success ms-2">Published</span>'
+                : '<span class="badge bg-secondary ms-2">Draft</span>';
 
             summaryHtml += `
                 <div class="col-md-4">
@@ -898,6 +1189,7 @@ async function loadExistingTimetables() {
                             <h6 class="card-title">
                                 <i class="bi bi-calendar-week text-primary"></i>
                                 ${classData.name}
+                                ${statusBadge}
                             </h6>
                             <p class="card-text text-muted mb-0">
                                 <small>${entryCount} scheduled slots</small>
@@ -920,10 +1212,15 @@ async function loadExistingTimetables() {
         if (selectedClass && timetables[selectedClass]) {
             // Display the selected class's timetable
             await displayTimetable(selectedClass);
+            // Show action buttons
+            showTimetableActions(selectedClass, timetables[selectedClass]);
         } else {
             // Show the summary
             container.innerHTML = summaryHtml;
         }
+
+        // Load saved timetables list
+        loadSavedTimetables();
 
     } catch (error) {
         console.error('Error loading existing timetables:', error);
@@ -1205,4 +1502,1185 @@ function showToast(message, type = 'success') {
     setTimeout(() => {
         toast.remove();
     }, 4000);
+}
+
+// ==================== AI SETTINGS FUNCTIONS ====================
+
+// Setup AI config status display
+function setupAIConfigForm() {
+    // Load and display current configuration status
+    loadAIConfig();
+}
+
+// Load and display AI config status
+function loadAIConfig() {
+    const statusDiv = document.getElementById('aiConfigStatus');
+    if (!statusDiv) return;
+
+    try {
+        const modelInfo = GeminiAI.getModelInfo();
+        if (modelInfo.configured) {
+            statusDiv.className = 'alert alert-success';
+            statusDiv.innerHTML = `<i class="bi bi-check-circle"></i> <strong>Configured</strong> - Using model: <code>${modelInfo.model}</code>`;
+        } else {
+            statusDiv.className = 'alert alert-warning';
+            statusDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> <strong>Not Configured</strong> - Please add your API key to <code>js/config.js</code>';
+        }
+    } catch (error) {
+        console.error('Error loading AI config:', error);
+        statusDiv.className = 'alert alert-danger';
+        statusDiv.innerHTML = '<i class="bi bi-x-circle"></i> Error checking configuration.';
+    }
+}
+
+// Test Gemini connection
+async function testGeminiConnection() {
+    const statusDiv = document.getElementById('aiConnectionStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split"></i> Testing connection...</div>';
+
+    try {
+        const isConfigured = GeminiAI.isConfigured();
+        if (!isConfigured) {
+            statusDiv.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> No API key configured. Please add your API key to <code>js/config.js</code> and refresh the page.</div>';
+            return;
+        }
+
+        // Try a simple test prompt
+        const result = await GeminiAI.getSchedulingSuggestions(
+            { test: { name: 'Test Subject', type: 'theory', lecturesPerWeek: 3 } },
+            { T1: { name: 'Test Teacher', dept: 'Test' } },
+            { C1: { name: 'Test Class', dept: 'Test' } },
+            { R1: { name: 'Room 1', type: 'classroom', capacity: 60 } },
+            { S1: { day: 'Monday', period: 1, type: 'class' } }
+        );
+
+        if (result.success) {
+            const modelInfo = GeminiAI.getModelInfo();
+            statusDiv.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> Connection successful! Model <code>${modelInfo.model}</code> is ready to use.</div>`;
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> Connection failed: ${result.error}</div>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> Error: ${error.message}</div>`;
+    }
+}
+
+// ==================== AI TIMETABLE FUNCTIONS ====================
+
+// Get AI suggestions before generating timetable
+async function getAISuggestions() {
+    const panel = document.getElementById('aiSuggestionsPanel');
+    const content = document.getElementById('aiSuggestionsContent');
+
+    // Check if AI is configured
+    const isConfigured = await GeminiAI.isConfigured();
+    if (!isConfigured) {
+        showToast('Gemini AI is not configured. Please add your API key in js/config.js', 'danger');
+        return;
+    }
+
+    // Show panel with loading state
+    panel.style.display = 'block';
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-info" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Analyzing your data and generating suggestions...</p>
+        </div>
+    `;
+
+    try {
+        const result = await GeminiAI.getSchedulingSuggestions(
+            subjectsData,
+            teachersData,
+            classesData,
+            roomsData,
+            slotsData
+        );
+
+        if (result.success) {
+            content.innerHTML = `
+                <div class="ai-suggestions">
+                    ${GeminiAI.formatResponse(result.suggestions)}
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="hideAISuggestions()">
+                        <i class="bi bi-x"></i> Close
+                    </button>
+                </div>
+            `;
+        } else {
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> Error getting suggestions: ${result.error}
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="hideAISuggestions()">
+                    <i class="bi bi-x"></i> Close
+                </button>
+            `;
+        }
+    } catch (error) {
+        content.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i> Error: ${error.message}
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="hideAISuggestions()">
+                <i class="bi bi-x"></i> Close
+            </button>
+        `;
+    }
+}
+
+// Hide AI suggestions panel
+function hideAISuggestions() {
+    document.getElementById('aiSuggestionsPanel').style.display = 'none';
+}
+
+// Analyze generated timetable with AI
+async function analyzeWithAI() {
+    const panel = document.getElementById('aiAnalysisPanel');
+    const content = document.getElementById('aiAnalysisContent');
+
+    // Check if AI is configured
+    const isConfigured = await GeminiAI.isConfigured();
+    if (!isConfigured) {
+        showToast('Gemini AI is not configured. Please add your API key in js/config.js', 'danger');
+        return;
+    }
+
+    // Show panel with loading state
+    panel.style.display = 'block';
+    content.innerHTML = `
+        <div class="text-center py-3">
+            <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Analyzing timetable for conflicts and improvements...</p>
+        </div>
+    `;
+
+    try {
+        // Fetch current timetables
+        const timetablesSnap = await database.ref('timetables').once('value');
+        const timetableData = timetablesSnap.val() || {};
+
+        const result = await GeminiAI.getConflictAnalysis(
+            timetableData,
+            subjectsData,
+            teachersData,
+            classesData,
+            slotsData
+        );
+
+        if (result.success) {
+            content.innerHTML = `
+                <div class="ai-analysis">
+                    ${GeminiAI.formatResponse(result.analysis)}
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="hideAIAnalysis()">
+                        <i class="bi bi-x"></i> Close Analysis
+                    </button>
+                </div>
+            `;
+        } else {
+            content.innerHTML = `
+                <div class="alert alert-danger mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> Error analyzing timetable: ${result.error}
+                </div>
+            `;
+        }
+    } catch (error) {
+        content.innerHTML = `
+            <div class="alert alert-danger mb-0">
+                <i class="bi bi-exclamation-triangle"></i> Error: ${error.message}
+            </div>
+        `;
+    }
+}
+
+// Hide AI analysis panel
+function hideAIAnalysis() {
+    document.getElementById('aiAnalysisPanel').style.display = 'none';
+}
+
+// Show AI Analyze button after timetable generation
+function showAIAnalyzeButton() {
+    const btn = document.getElementById('aiAnalyzeBtn');
+    if (btn) {
+        btn.style.display = 'inline-block';
+    }
+}
+
+// Initialize AI features when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    // Setup AI config form (delay to ensure DOM is ready)
+    setTimeout(() => {
+        setupAIConfigForm();
+    }, 500);
+});
+
+// ==================== REPORTS & ANALYTICS ====================
+
+// Store report data for export
+let currentReportData = {
+    subjects: [],
+    teachers: [],
+    classes: []
+};
+
+// Populate report filter dropdowns
+function populateReportFilters() {
+    const classFilter = document.getElementById('reportClassFilter');
+    if (!classFilter) return;
+
+    classFilter.innerHTML = '<option value="">All Classes</option>';
+    Object.entries(classesData).forEach(([id, cls]) => {
+        classFilter.innerHTML += `<option value="${id}">${cls.name}</option>`;
+    });
+}
+
+// Load all reports
+async function loadReports() {
+    await Promise.all([
+        loadSubjectProgressReport(),
+        loadTeacherWorkloadReport(),
+        loadClassCompletionReport()
+    ]);
+}
+
+// Load subject progress report
+async function loadSubjectProgressReport() {
+    const container = document.getElementById('subjectProgressReport');
+    if (!container) return;
+
+    const classFilter = document.getElementById('reportClassFilter')?.value || '';
+
+    try {
+        // Get all lecture records
+        const recordsSnap = await database.ref('lectureRecords').once('value');
+        const allRecords = recordsSnap.val() || {};
+
+        // Calculate progress for each subject
+        const subjectProgress = [];
+
+        Object.entries(subjectsData).forEach(([subjectId, subject]) => {
+            if (classFilter && subject.classId !== classFilter) return;
+
+            const classRecords = allRecords[subject.classId] || {};
+            let completed = 0;
+
+            Object.values(classRecords).forEach(dateRecords => {
+                Object.values(dateRecords).forEach(record => {
+                    if (record.subjectId === subjectId &&
+                        (record.status === 'conducted' || record.status === 'substituted')) {
+                        completed++;
+                    }
+                });
+            });
+
+            const total = subject.totalLectures || 0;
+            const remaining = Math.max(0, total - completed);
+            const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+            subjectProgress.push({
+                id: subjectId,
+                code: subject.code || subjectId,
+                name: subject.name,
+                className: classesData[subject.classId]?.name || subject.classId,
+                teacherName: teachersData[subject.teacherId]?.name || 'Unassigned',
+                total,
+                completed,
+                remaining,
+                percent
+            });
+        });
+
+        // Sort by progress percentage
+        subjectProgress.sort((a, b) => a.percent - b.percent);
+
+        currentReportData.subjects = subjectProgress;
+
+        if (subjectProgress.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-3">No subjects found.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Class</th>
+                            <th>Teacher</th>
+                            <th>Required</th>
+                            <th>Completed</th>
+                            <th>Remaining</th>
+                            <th style="min-width: 200px;">Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${subjectProgress.map(s => {
+                            const progressClass = s.percent >= 80 ? 'bg-success' :
+                                                  s.percent >= 50 ? 'bg-warning' : 'bg-danger';
+                            return `
+                                <tr>
+                                    <td><strong>${s.name}</strong><br><small class="text-muted">${s.code}</small></td>
+                                    <td>${s.className}</td>
+                                    <td>${s.teacherName}</td>
+                                    <td>${s.total}</td>
+                                    <td>${s.completed}</td>
+                                    <td>${s.remaining}</td>
+                                    <td>
+                                        <div class="progress" style="height: 25px;">
+                                            <div class="progress-bar ${progressClass}" style="width: ${s.percent}%">
+                                                ${s.percent}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-danger">Error loading report: ${error.message}</div>`;
+    }
+}
+
+// Load teacher workload report
+async function loadTeacherWorkloadReport() {
+    const container = document.getElementById('teacherWorkloadReport');
+    if (!container) return;
+
+    try {
+        // Get all lecture records
+        const recordsSnap = await database.ref('lectureRecords').once('value');
+        const allRecords = recordsSnap.val() || {};
+
+        // Calculate workload for each teacher
+        const teacherStats = {};
+
+        Object.entries(teachersData).forEach(([teacherId, teacher]) => {
+            teacherStats[teacherId] = {
+                id: teacherId,
+                name: teacher.name,
+                dept: teacher.dept || 'N/A',
+                scheduled: 0,
+                conducted: 0,
+                absent: 0,
+                substituted: 0,
+                substitutionsTaken: 0
+            };
+        });
+
+        // Count from records
+        Object.values(allRecords).forEach(classRecords => {
+            Object.values(classRecords).forEach(dateRecords => {
+                Object.values(dateRecords).forEach(record => {
+                    const scheduled = record.scheduledTeacherId;
+                    const actual = record.actualTeacherId;
+
+                    if (teacherStats[scheduled]) {
+                        teacherStats[scheduled].scheduled++;
+
+                        if (record.status === 'conducted') {
+                            teacherStats[scheduled].conducted++;
+                        } else if (record.status === 'absent') {
+                            teacherStats[scheduled].absent++;
+                        } else if (record.status === 'substituted') {
+                            if (scheduled === actual) {
+                                teacherStats[scheduled].conducted++;
+                            } else {
+                                teacherStats[scheduled].substituted++;
+                            }
+                        }
+                    }
+
+                    // Count substitutions taken
+                    if (record.status === 'substituted' && scheduled !== actual && teacherStats[actual]) {
+                        teacherStats[actual].substitutionsTaken++;
+                    }
+                });
+            });
+        });
+
+        const teacherData = Object.values(teacherStats).filter(t => t.scheduled > 0 || t.substitutionsTaken > 0);
+        teacherData.sort((a, b) => b.scheduled - a.scheduled);
+
+        currentReportData.teachers = teacherData;
+
+        if (teacherData.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-3">No lecture data found.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Teacher</th>
+                            <th>Department</th>
+                            <th>Scheduled</th>
+                            <th>Conducted</th>
+                            <th>Absent</th>
+                            <th>Substituted</th>
+                            <th>Subs Taken</th>
+                            <th>Attendance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${teacherData.map(t => {
+                            const attendanceRate = t.scheduled > 0 ?
+                                Math.round((t.conducted / t.scheduled) * 100) : 100;
+                            const rateClass = attendanceRate >= 90 ? 'text-success' :
+                                              attendanceRate >= 70 ? 'text-warning' : 'text-danger';
+                            return `
+                                <tr>
+                                    <td><strong>${t.name}</strong></td>
+                                    <td>${t.dept}</td>
+                                    <td>${t.scheduled}</td>
+                                    <td><span class="badge bg-success">${t.conducted}</span></td>
+                                    <td><span class="badge bg-danger">${t.absent}</span></td>
+                                    <td><span class="badge bg-warning text-dark">${t.substituted}</span></td>
+                                    <td><span class="badge bg-info">${t.substitutionsTaken}</span></td>
+                                    <td class="${rateClass}"><strong>${attendanceRate}%</strong></td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-danger">Error loading report: ${error.message}</div>`;
+    }
+}
+
+// Load class completion report
+async function loadClassCompletionReport() {
+    const container = document.getElementById('classCompletionReport');
+    if (!container) return;
+
+    const classFilter = document.getElementById('reportClassFilter')?.value || '';
+
+    try {
+        // Get all lecture records
+        const recordsSnap = await database.ref('lectureRecords').once('value');
+        const allRecords = recordsSnap.val() || {};
+
+        // Calculate completion for each class
+        const classStats = [];
+
+        Object.entries(classesData).forEach(([classId, cls]) => {
+            if (classFilter && classId !== classFilter) return;
+
+            // Get subjects for this class
+            const classSubjects = Object.entries(subjectsData)
+                .filter(([_, s]) => s.classId === classId);
+
+            let totalRequired = 0;
+            let totalCompleted = 0;
+
+            const classRecords = allRecords[classId] || {};
+
+            classSubjects.forEach(([subjectId, subject]) => {
+                totalRequired += subject.totalLectures || 0;
+
+                Object.values(classRecords).forEach(dateRecords => {
+                    Object.values(dateRecords).forEach(record => {
+                        if (record.subjectId === subjectId &&
+                            (record.status === 'conducted' || record.status === 'substituted')) {
+                            totalCompleted++;
+                        }
+                    });
+                });
+            });
+
+            const remaining = Math.max(0, totalRequired - totalCompleted);
+            const percent = totalRequired > 0 ? Math.round((totalCompleted / totalRequired) * 100) : 0;
+
+            classStats.push({
+                id: classId,
+                name: cls.name,
+                batch: batchesData[cls.batchId]?.name || 'N/A',
+                subjectCount: classSubjects.length,
+                totalRequired,
+                totalCompleted,
+                remaining,
+                percent
+            });
+        });
+
+        classStats.sort((a, b) => a.percent - b.percent);
+
+        currentReportData.classes = classStats;
+
+        if (classStats.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-3">No class data found.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Class</th>
+                            <th>Batch</th>
+                            <th>Subjects</th>
+                            <th>Total Lectures</th>
+                            <th>Completed</th>
+                            <th>Remaining</th>
+                            <th style="min-width: 200px;">Overall Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${classStats.map(c => {
+                            const progressClass = c.percent >= 80 ? 'bg-success' :
+                                                  c.percent >= 50 ? 'bg-warning' : 'bg-danger';
+                            return `
+                                <tr>
+                                    <td><strong>${c.name}</strong></td>
+                                    <td>${c.batch}</td>
+                                    <td>${c.subjectCount}</td>
+                                    <td>${c.totalRequired}</td>
+                                    <td>${c.totalCompleted}</td>
+                                    <td>${c.remaining}</td>
+                                    <td>
+                                        <div class="progress" style="height: 25px;">
+                                            <div class="progress-bar ${progressClass}" style="width: ${c.percent}%">
+                                                ${c.percent}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-danger">Error loading report: ${error.message}</div>`;
+    }
+}
+
+// ==================== LECTURE RECORDS ====================
+
+// Populate records filter dropdowns
+function populateRecordsFilters() {
+    const classFilter = document.getElementById('recordsClassFilter');
+    if (!classFilter) return;
+
+    classFilter.innerHTML = '<option value="">All Classes</option>';
+    Object.entries(classesData).forEach(([id, cls]) => {
+        classFilter.innerHTML += `<option value="${id}">${cls.name}</option>`;
+    });
+}
+
+// Clear records filters
+function clearRecordsFilters() {
+    document.getElementById('recordsClassFilter').value = '';
+    document.getElementById('recordsDateFilter').value = '';
+    document.getElementById('recordsStatusFilter').value = '';
+    document.getElementById('lectureRecordsContainer').innerHTML =
+        '<p class="text-muted">Select filters and click Search to view records.</p>';
+    document.getElementById('recordsCount').textContent = '0 records';
+}
+
+// Load lecture records with filters
+async function loadLectureRecords() {
+    const container = document.getElementById('lectureRecordsContainer');
+    const countBadge = document.getElementById('recordsCount');
+    if (!container) return;
+
+    const classFilter = document.getElementById('recordsClassFilter')?.value || '';
+    const dateFilter = document.getElementById('recordsDateFilter')?.value || '';
+    const statusFilter = document.getElementById('recordsStatusFilter')?.value || '';
+
+    container.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+
+    try {
+        const recordsSnap = await database.ref('lectureRecords').once('value');
+        const allRecords = recordsSnap.val() || {};
+
+        // Check if any records exist at all
+        const hasAnyRecords = Object.keys(allRecords).length > 0;
+
+        const filteredRecords = [];
+
+        Object.entries(allRecords).forEach(([classId, classRecords]) => {
+            if (classFilter && classId !== classFilter) return;
+
+            Object.entries(classRecords).forEach(([date, dateRecords]) => {
+                if (dateFilter && date !== dateFilter) return;
+
+                Object.entries(dateRecords).forEach(([slotId, record]) => {
+                    if (statusFilter && record.status !== statusFilter) return;
+
+                    filteredRecords.push({
+                        classId,
+                        className: classesData[classId]?.name || classId,
+                        date,
+                        slotId,
+                        period: slotId.split('-P')[1],
+                        ...record,
+                        subjectName: subjectsData[record.subjectId]?.name || record.subjectId,
+                        scheduledTeacherName: teachersData[record.scheduledTeacherId]?.name || record.scheduledTeacherId,
+                        actualTeacherName: teachersData[record.actualTeacherId]?.name || record.actualTeacherId
+                    });
+                });
+            });
+        });
+
+        // Sort by date descending
+        filteredRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        countBadge.textContent = `${filteredRecords.length} records`;
+
+        if (filteredRecords.length === 0) {
+            if (!hasAnyRecords) {
+                container.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="bi bi-clipboard-x text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-3 mb-1">No lecture records yet</p>
+                        <small class="text-muted">Faculty members can mark lecture attendance from their dashboard.</small>
+                    </div>`;
+            } else {
+                container.innerHTML = '<div class="text-center text-muted py-3">No records found matching the filters.</div>';
+            }
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Class</th>
+                            <th>Period</th>
+                            <th>Subject</th>
+                            <th>Scheduled Teacher</th>
+                            <th>Actual Teacher</th>
+                            <th>Status</th>
+                            <th>Marked By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filteredRecords.map(r => {
+                            const statusBadge = r.status === 'conducted' ?
+                                '<span class="badge bg-success">Conducted</span>' :
+                                r.status === 'absent' ?
+                                '<span class="badge bg-danger">Absent</span>' :
+                                '<span class="badge bg-warning text-dark">Substituted</span>';
+
+                            const date = new Date(r.date).toLocaleDateString('en-US', {
+                                month: 'short', day: 'numeric', year: 'numeric'
+                            });
+
+                            return `
+                                <tr>
+                                    <td>${date}</td>
+                                    <td>${r.className}</td>
+                                    <td>P${r.period}</td>
+                                    <td>${r.subjectName}</td>
+                                    <td>${r.scheduledTeacherName}</td>
+                                    <td>${r.actualTeacherName}
+                                        ${r.scheduledTeacherId !== r.actualTeacherId ?
+                                            '<small class="text-info">(Sub)</small>' : ''}
+                                    </td>
+                                    <td>${statusBadge}</td>
+                                    <td><small class="text-muted">${new Date(r.markedAt).toLocaleString()}</small></td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-danger">Error loading records: ${error.message}</div>`;
+    }
+}
+
+// ==================== EXPORT FUNCTIONS ====================
+
+// Export report to PDF
+function exportReportPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(18);
+    doc.text('Progress Report', 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
+
+    let yPos = 40;
+
+    // Subject Progress Table
+    if (currentReportData.subjects.length > 0) {
+        doc.setFontSize(14);
+        doc.text('Subject-wise Progress', 14, yPos);
+        yPos += 5;
+
+        doc.autoTable({
+            startY: yPos,
+            head: [['Subject', 'Class', 'Required', 'Completed', 'Progress']],
+            body: currentReportData.subjects.map(s => [
+                s.name,
+                s.className,
+                s.total.toString(),
+                s.completed.toString(),
+                `${s.percent}%`
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: [13, 110, 253] }
+        });
+
+        yPos = doc.lastAutoTable.finalY + 15;
+    }
+
+    // Teacher Workload Table
+    if (currentReportData.teachers.length > 0 && yPos < 250) {
+        doc.setFontSize(14);
+        doc.text('Teacher Workload', 14, yPos);
+        yPos += 5;
+
+        doc.autoTable({
+            startY: yPos,
+            head: [['Teacher', 'Scheduled', 'Conducted', 'Absent', 'Attendance']],
+            body: currentReportData.teachers.map(t => [
+                t.name,
+                t.scheduled.toString(),
+                t.conducted.toString(),
+                t.absent.toString(),
+                `${t.scheduled > 0 ? Math.round((t.conducted / t.scheduled) * 100) : 100}%`
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: [13, 110, 253] }
+        });
+    }
+
+    doc.save('progress-report.pdf');
+    showToast('PDF exported successfully!', 'success');
+}
+
+// Export report to Excel
+function exportReportExcel() {
+    const wb = XLSX.utils.book_new();
+
+    // Subject Progress Sheet
+    if (currentReportData.subjects.length > 0) {
+        const subjectData = currentReportData.subjects.map(s => ({
+            'Subject Code': s.code,
+            'Subject Name': s.name,
+            'Class': s.className,
+            'Teacher': s.teacherName,
+            'Required Lectures': s.total,
+            'Completed': s.completed,
+            'Remaining': s.remaining,
+            'Progress %': s.percent
+        }));
+        const ws1 = XLSX.utils.json_to_sheet(subjectData);
+        XLSX.utils.book_append_sheet(wb, ws1, 'Subject Progress');
+    }
+
+    // Teacher Workload Sheet
+    if (currentReportData.teachers.length > 0) {
+        const teacherData = currentReportData.teachers.map(t => ({
+            'Teacher Name': t.name,
+            'Department': t.dept,
+            'Scheduled': t.scheduled,
+            'Conducted': t.conducted,
+            'Absent': t.absent,
+            'Substituted': t.substituted,
+            'Substitutions Taken': t.substitutionsTaken,
+            'Attendance %': t.scheduled > 0 ? Math.round((t.conducted / t.scheduled) * 100) : 100
+        }));
+        const ws2 = XLSX.utils.json_to_sheet(teacherData);
+        XLSX.utils.book_append_sheet(wb, ws2, 'Teacher Workload');
+    }
+
+    // Class Completion Sheet
+    if (currentReportData.classes.length > 0) {
+        const classData = currentReportData.classes.map(c => ({
+            'Class': c.name,
+            'Batch': c.batch,
+            'Subjects': c.subjectCount,
+            'Total Lectures': c.totalRequired,
+            'Completed': c.totalCompleted,
+            'Remaining': c.remaining,
+            'Progress %': c.percent
+        }));
+        const ws3 = XLSX.utils.json_to_sheet(classData);
+        XLSX.utils.book_append_sheet(wb, ws3, 'Class Completion');
+    }
+
+    XLSX.writeFile(wb, 'progress-report.xlsx');
+    showToast('Excel exported successfully!', 'success');
+}
+
+// ==================== TIMETABLE DRAFT/PUBLISH ====================
+
+// Store current timetable state
+let currentTimetableData = null;
+let currentTimetableClassId = null;
+
+// Show draft/publish buttons after generation
+function showTimetableActions(classId, timetableData) {
+    currentTimetableClassId = classId;
+    currentTimetableData = timetableData;
+
+    document.getElementById('saveDraftBtn').style.display = 'inline-block';
+    document.getElementById('publishBtn').style.display = 'inline-block';
+
+    // Check existing status
+    updateTimetableStatusBadge(classId);
+}
+
+// Update status badge
+async function updateTimetableStatusBadge(classId) {
+    const statusBadge = document.getElementById('timetableStatus');
+    if (!statusBadge) return;
+
+    try {
+        const snapshot = await database.ref(`timetables/${classId}/status`).once('value');
+        const status = snapshot.val() || 'draft';
+
+        statusBadge.style.display = 'inline-block';
+        if (status === 'published') {
+            statusBadge.className = 'badge bg-success ms-2';
+            statusBadge.textContent = 'Published';
+        } else {
+            statusBadge.className = 'badge bg-secondary ms-2';
+            statusBadge.textContent = 'Draft';
+        }
+    } catch (error) {
+        console.error('Error fetching timetable status:', error);
+    }
+}
+
+// Save timetable as draft
+async function saveTimetableAsDraft() {
+    if (!currentTimetableClassId || !currentTimetableData) {
+        showToast('No timetable to save', 'danger');
+        return;
+    }
+
+    try {
+        // Save timetable with draft status
+        await database.ref(`timetables/${currentTimetableClassId}`).update({
+            status: 'draft',
+            updatedAt: Date.now(),
+            updatedBy: auth.currentUser.uid
+        });
+
+        showToast('Timetable saved as draft', 'success');
+        updateTimetableStatusBadge(currentTimetableClassId);
+        loadSavedTimetables();
+    } catch (error) {
+        showToast('Error saving draft: ' + error.message, 'danger');
+    }
+}
+
+// Publish timetable
+async function publishTimetable() {
+    if (!currentTimetableClassId || !currentTimetableData) {
+        showToast('No timetable to publish', 'danger');
+        return;
+    }
+
+    if (!confirm('Are you sure you want to publish this timetable? It will be visible to all users.')) {
+        return;
+    }
+
+    try {
+        // Update status to published
+        await database.ref(`timetables/${currentTimetableClassId}`).update({
+            status: 'published',
+            publishedAt: Date.now(),
+            publishedBy: auth.currentUser.uid
+        });
+
+        showToast('Timetable published successfully!', 'success');
+        updateTimetableStatusBadge(currentTimetableClassId);
+        loadSavedTimetables();
+    } catch (error) {
+        showToast('Error publishing: ' + error.message, 'danger');
+    }
+}
+
+// Load saved timetables list
+async function loadSavedTimetables() {
+    const container = document.getElementById('savedTimetablesContainer');
+    if (!container) return;
+
+    try {
+        const snapshot = await database.ref('timetables').once('value');
+        const timetables = snapshot.val() || {};
+
+        const timetableList = [];
+        Object.entries(timetables).forEach(([classId, data]) => {
+            if (data.status) {
+                timetableList.push({
+                    classId,
+                    className: classesData[classId]?.name || classId,
+                    status: data.status,
+                    updatedAt: data.updatedAt,
+                    publishedAt: data.publishedAt
+                });
+            }
+        });
+
+        if (timetableList.length === 0) {
+            container.innerHTML = '<p class="text-muted">No saved timetables yet.</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Class</th>
+                            <th>Status</th>
+                            <th>Last Updated</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${timetableList.map(t => {
+                            const statusBadge = t.status === 'published' ?
+                                '<span class="badge bg-success">Published</span>' :
+                                '<span class="badge bg-secondary">Draft</span>';
+                            const date = t.updatedAt ?
+                                new Date(t.updatedAt).toLocaleString() : 'N/A';
+
+                            return `
+                                <tr>
+                                    <td><strong>${t.className}</strong></td>
+                                    <td>${statusBadge}</td>
+                                    <td><small>${date}</small></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="viewSavedTimetable('${t.classId}')">
+                                            <i class="bi bi-eye"></i> View
+                                        </button>
+                                        ${t.status === 'draft' ? `
+                                            <button class="btn btn-sm btn-success" onclick="quickPublish('${t.classId}')">
+                                                <i class="bi bi-check"></i> Publish
+                                            </button>
+                                        ` : `
+                                            <button class="btn btn-sm btn-warning" onclick="unpublishTimetable('${t.classId}')">
+                                                <i class="bi bi-x"></i> Unpublish
+                                            </button>
+                                        `}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `<p class="text-danger">Error loading timetables: ${error.message}</p>`;
+    }
+}
+
+// View saved timetable
+async function viewSavedTimetable(classId) {
+    // Set the dropdown and load the timetable
+    document.getElementById('timetableClass').value = classId;
+    currentTimetableClassId = classId;
+
+    try {
+        const snapshot = await database.ref(`timetables/${classId}`).once('value');
+        const data = snapshot.val();
+
+        if (data) {
+            currentTimetableData = data;
+            // The loadExistingTimetables function should handle display
+            // Trigger reload
+            loadExistingTimetables();
+            updateTimetableStatusBadge(classId);
+
+            // Show action buttons
+            document.getElementById('saveDraftBtn').style.display = 'inline-block';
+            document.getElementById('publishBtn').style.display = 'inline-block';
+            document.getElementById('aiAnalyzeBtn').style.display = 'inline-block';
+        }
+    } catch (error) {
+        showToast('Error loading timetable: ' + error.message, 'danger');
+    }
+}
+
+// Quick publish from list
+async function quickPublish(classId) {
+    if (!confirm('Publish this timetable?')) return;
+
+    try {
+        await database.ref(`timetables/${classId}`).update({
+            status: 'published',
+            publishedAt: Date.now(),
+            publishedBy: auth.currentUser.uid
+        });
+
+        showToast('Timetable published!', 'success');
+        loadSavedTimetables();
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
+}
+
+// Unpublish timetable
+async function unpublishTimetable(classId) {
+    if (!confirm('Unpublish this timetable? It will no longer be visible to users.')) return;
+
+    try {
+        await database.ref(`timetables/${classId}`).update({
+            status: 'draft',
+            updatedAt: Date.now()
+        });
+
+        showToast('Timetable unpublished', 'success');
+        loadSavedTimetables();
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
+}
+
+// ==================== TEACHER AVAILABILITY ====================
+
+let currentAvailabilityTeacherId = null;
+let currentUnavailableSlots = [];
+
+// Open availability modal
+async function openAvailabilityModal(teacherId) {
+    currentAvailabilityTeacherId = teacherId;
+    const teacher = teachersData[teacherId];
+
+    if (!teacher) {
+        showToast('Teacher not found', 'danger');
+        return;
+    }
+
+    currentUnavailableSlots = [...(teacher.unavailableSlots || [])];
+
+    document.getElementById('availabilityTeacherId').value = teacherId;
+
+    // Build the availability grid
+    await buildAvailabilityGrid();
+
+    const modal = new bootstrap.Modal(document.getElementById('availabilityModal'));
+    modal.show();
+}
+
+// Build availability grid
+async function buildAvailabilityGrid() {
+    const table = document.getElementById('availabilityGrid');
+    const thead = table.querySelector('thead tr');
+    const tbody = table.querySelector('tbody');
+
+    // Get periods from slots data
+    const periods = [];
+    const periodInfo = {};
+
+    Object.values(slotsData).forEach(slot => {
+        if (slot.type !== 'break' && !periods.includes(slot.period)) {
+            periods.push(slot.period);
+            periodInfo[slot.period] = {
+                start: slot.start,
+                end: slot.end
+            };
+        }
+    });
+
+    periods.sort((a, b) => a - b);
+
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const shortDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+    // Build header
+    thead.innerHTML = '<th>Day / Period</th>';
+    periods.forEach(p => {
+        const info = periodInfo[p] || {};
+        thead.innerHTML += `<th>P${p}<br><small>${info.start || ''}-${info.end || ''}</small></th>`;
+    });
+
+    // Build rows
+    tbody.innerHTML = '';
+    days.forEach((day, dayIndex) => {
+        let row = `<tr><td><strong>${day}</strong></td>`;
+
+        periods.forEach(period => {
+            const slotId = `${shortDays[dayIndex]}-P${period}`;
+            const isUnavailable = currentUnavailableSlots.includes(slotId);
+
+            row += `
+                <td class="availability-cell ${isUnavailable ? 'unavailable' : 'available'}"
+                    data-slot="${slotId}"
+                    onclick="toggleAvailability('${slotId}')"
+                    style="cursor: pointer; ${isUnavailable ? 'background-color: #dc3545; color: white;' : 'background-color: #28a745; color: white;'}">
+                    ${isUnavailable ? '<i class="bi bi-x"></i>' : '<i class="bi bi-check"></i>'}
+                </td>
+            `;
+        });
+
+        row += '</tr>';
+        tbody.innerHTML += row;
+    });
+}
+
+// Toggle slot availability
+function toggleAvailability(slotId) {
+    const cell = document.querySelector(`[data-slot="${slotId}"]`);
+
+    if (currentUnavailableSlots.includes(slotId)) {
+        // Make available
+        currentUnavailableSlots = currentUnavailableSlots.filter(s => s !== slotId);
+        cell.style.backgroundColor = '#28a745';
+        cell.innerHTML = '<i class="bi bi-check"></i>';
+        cell.classList.remove('unavailable');
+        cell.classList.add('available');
+    } else {
+        // Make unavailable
+        currentUnavailableSlots.push(slotId);
+        cell.style.backgroundColor = '#dc3545';
+        cell.innerHTML = '<i class="bi bi-x"></i>';
+        cell.classList.remove('available');
+        cell.classList.add('unavailable');
+    }
+}
+
+// Save teacher availability
+async function saveTeacherAvailability() {
+    if (!currentAvailabilityTeacherId) {
+        showToast('No teacher selected', 'danger');
+        return;
+    }
+
+    try {
+        await database.ref(`teachers/${currentAvailabilityTeacherId}`).update({
+            unavailableSlots: currentUnavailableSlots
+        });
+
+        const modal = bootstrap.Modal.getInstance(document.getElementById('availabilityModal'));
+        modal.hide();
+
+        showToast('Availability updated successfully!', 'success');
+
+        // Refresh teachers table
+        await loadTeachers();
+    } catch (error) {
+        showToast('Error saving availability: ' + error.message, 'danger');
+    }
 }
