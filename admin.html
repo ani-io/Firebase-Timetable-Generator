@@ -278,6 +278,39 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Lab Batch Count</label>
+                                <select class="form-select" id="classBatchCount" onchange="updateBatchPreview()">
+                                    <option value="1">1 (No batches)</option>
+                                    <option value="2">2 Batches</option>
+                                    <option value="3">3 Batches</option>
+                                    <option value="4" selected>4 Batches</option>
+                                    <option value="5">5 Batches</option>
+                                    <option value="6">6 Batches</option>
+                                </select>
+                                <small class="text-muted">For parallel lab sessions</small>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Batch Prefix</label>
+                                <input type="text" class="form-control" id="classBatchPrefix" placeholder="e.g., A" value="A" maxlength="2" onkeyup="updateBatchPreview()">
+                                <small class="text-muted">Creates: A1, A2, A3...</small>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Students Per Batch</label>
+                                <input type="number" class="form-control" id="classStudentsPerBatch" placeholder="e.g., 15" value="15" min="1" max="100">
+                                <small class="text-muted">For auto-assignment</small>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Batch Preview</label>
+                                <div id="batchPreview" class="form-control bg-light" style="min-height: 38px;">
+                                    <span class="badge bg-primary me-1">A1</span>
+                                    <span class="badge bg-primary me-1">A2</span>
+                                    <span class="badge bg-primary me-1">A3</span>
+                                    <span class="badge bg-primary me-1">A4</span>
+                                </div>
+                            </div>
+                        </div>
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-check"></i> Add Class
                         </button>
@@ -294,14 +327,15 @@
                                 <tr>
                                     <th>Class ID</th>
                                     <th>Name</th>
-                                    <th>Batch</th>
+                                    <th>Academic Batch</th>
                                     <th>Department</th>
+                                    <th>Lab Batches</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="classesTableBody">
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted">No classes added yet</td>
+                                    <td colspan="6" class="text-center text-muted">No classes added yet</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -494,22 +528,46 @@
                         </div>
                         <div class="row" id="practicalFields" style="display: none;">
                             <div class="col-md-3 mb-3">
-                                <label class="form-label">Lab Room</label>
-                                <select class="form-select" id="labRoom">
-                                    <option value="">Select Lab</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Duration (Periods)</label>
                                 <select class="form-select" id="practicalDuration">
                                     <option value="2">2 Periods (2 hours)</option>
                                     <option value="3">3 Periods (3 hours)</option>
                                 </select>
                             </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="form-check form-switch mt-4">
+                                    <input class="form-check-input" type="checkbox" id="isBatchBased" onchange="toggleBatchBasedFields()">
+                                    <label class="form-check-label" for="isBatchBased">
+                                        <strong>Batch-Based Practical</strong>
+                                    </label>
+                                </div>
+                                <small class="text-muted">Different teachers/labs per batch</small>
+                            </div>
                             <div class="col-md-6">
                                 <small class="text-muted">
-                                    <i class="bi bi-info-circle"></i> Practicals are scheduled as consecutive periods in the selected lab.
+                                    <i class="bi bi-info-circle"></i> Practicals are scheduled as consecutive periods.
                                 </small>
+                            </div>
+                        </div>
+
+                        <!-- Non-batch based practical fields -->
+                        <div class="row" id="singleLabFields" style="display: none;">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Lab Room</label>
+                                <select class="form-select" id="labRoom">
+                                    <option value="">Select Lab</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Batch-based practical fields -->
+                        <div id="batchBasedFields" style="display: none;">
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-info-circle"></i> Assign teachers and labs for each batch. All batches will have their practicals scheduled in parallel.
+                            </div>
+                            <div id="batchAssignmentsContainer">
+                                <!-- Dynamic batch assignment rows will be added here -->
+                                <p class="text-muted">Select a class first to see available batches.</p>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary">
@@ -550,9 +608,9 @@
             <section id="slotsSection" class="content-section" style="display: none;">
                 <div class="form-section">
                     <h5><i class="bi bi-clock"></i> Manage Time Slots</h5>
-                    <p class="text-muted">Time slots: 9am-5pm with breaks after every 3 periods (Mon-Fri)</p>
+                    <p class="text-muted">Time slots: 8:15 AM - 5:45 PM with Lunch (12:15-1:15 PM) and Short Break (4:15-4:30 PM)</p>
                     <button class="btn btn-primary me-2" onclick="generateDefaultSlots()">
-                        <i class="bi bi-magic"></i> Generate Default Slots (9am-5pm with Breaks)
+                        <i class="bi bi-magic"></i> Generate Default Slots (8:15 AM - 5:45 PM)
                     </button>
                     <button class="btn btn-outline-danger" onclick="clearAllSlots()">
                         <i class="bi bi-trash"></i> Clear All Slots
@@ -597,7 +655,13 @@
                                 <option value="">All Classes</option>
                             </select>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Filter by Batch</label>
+                            <select class="form-select" id="timetableBatchFilter" onchange="filterTimetableByBatch()">
+                                <option value="">All Batches</option>
+                            </select>
+                        </div>
+                        <div class="col-md-7 mb-3">
                             <button class="btn btn-outline-info me-2" onclick="getAISuggestions()">
                                 <i class="bi bi-robot"></i> Get AI Suggestions
                             </button>
@@ -606,6 +670,9 @@
                             </button>
                             <button class="btn btn-outline-danger ms-2" onclick="clearTimetable()">
                                 <i class="bi bi-trash"></i> Clear
+                            </button>
+                            <button class="btn btn-outline-success ms-2" onclick="exportAllTimetables()">
+                                <i class="bi bi-file-earmark-excel"></i> Export All
                             </button>
                         </div>
                     </div>
@@ -641,8 +708,11 @@
                             <button id="saveDraftBtn" class="btn btn-sm btn-outline-primary me-2" onclick="saveTimetableAsDraft()" style="display: none;">
                                 <i class="bi bi-save"></i> Save as Draft
                             </button>
-                            <button id="publishBtn" class="btn btn-sm btn-success" onclick="publishTimetable()" style="display: none;">
+                            <button id="publishBtn" class="btn btn-sm btn-success me-2" onclick="publishTimetable()" style="display: none;">
                                 <i class="bi bi-check-circle"></i> Publish
+                            </button>
+                            <button id="exportExcelBtn" class="btn btn-sm btn-outline-success" onclick="exportTimetableToExcel()" style="display: none;">
+                                <i class="bi bi-file-earmark-excel"></i> Export Excel
                             </button>
                         </div>
                     </div>

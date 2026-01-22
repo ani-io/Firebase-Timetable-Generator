@@ -13,14 +13,14 @@
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-    apiKey: "AIzaSyADVLcL2SJjFgdmsyFSi04WxjuicyVU-zY",
-    authDomain: "time-table-maker-501e2.firebaseapp.com",
-    databaseURL: "https://time-table-maker-501e2-default-rtdb.firebaseio.com",
-    projectId: "time-table-maker-501e2",
-    storageBucket: "time-table-maker-501e2.firebasestorage.app",
-    messagingSenderId: "272337198586",
-    appId: "1:272337198586:web:b6084b791b950623f5d843",
-    measurementId: "G-715LBPXP5F"
+    apiKey: "AIzaSyDr7R3hgwcqGlrhL4cpZO-M2K7CzYYzED8",
+    authDomain: "timetable-be4a4.firebaseapp.com",
+    databaseURL: "https://timetable-be4a4-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "timetable-be4a4",
+    storageBucket: "timetable-be4a4.firebasestorage.app",
+    messagingSenderId: "854719450162",
+    appId: "1:854719450162:web:52d262801e03b8798a802b",
+    measurementId: "G-8JJLVX2WZK"
   };
 
 // Initialize Firebase

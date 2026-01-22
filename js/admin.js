@@ -393,6 +393,43 @@ function populateClassBatchDropdown() {
 
 // ==================== CLASS OPERATIONS ====================
 
+// Update batch preview when count or prefix changes
+function updateBatchPreview() {
+    const count = parseInt(document.getElementById('classBatchCount')?.value) || 4;
+    const prefix = document.getElementById('classBatchPrefix')?.value || 'A';
+    const preview = document.getElementById('batchPreview');
+
+    if (!preview) return;
+
+    // Clear existing content
+    preview.textContent = '';
+
+    if (count <= 1) {
+        const span = document.createElement('span');
+        span.className = 'text-muted';
+        span.textContent = 'No lab batches';
+        preview.appendChild(span);
+        return;
+    }
+
+    for (let i = 1; i <= count; i++) {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-primary me-1';
+        badge.textContent = `${prefix}${i}`;
+        preview.appendChild(badge);
+    }
+}
+
+// Generate batch names array
+function generateBatchNames(count, prefix) {
+    if (count <= 1) return [];
+    const batches = [];
+    for (let i = 1; i <= count; i++) {
+        batches.push(`${prefix}${i}`);
+    }
+    return batches;
+}
+
 async function loadClasses() {
     const snapshot = await database.ref('classes').once('value');
     classesData = snapshot.val() || {};
@@ -404,7 +441,7 @@ function renderClassesTable() {
     const classes = Object.entries(classesData);
 
     if (classes.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No classes added yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No classes added yet</td></tr>';
         return;
     }
 
@@ -412,17 +449,33 @@ function renderClassesTable() {
         const batchName = data.batchId && batchesData[data.batchId]
             ? batchesData[data.batchId].name
             : '<span class="text-muted">-</span>';
+
+        // Lab batches display
+        let labBatchesHtml = '<span class="text-muted">None</span>';
+        if (data.labBatches && data.labBatches.length > 0) {
+            labBatchesHtml = data.labBatches.map(b =>
+                `<span class="badge bg-info me-1">${escapeHtml(b)}</span>`
+            ).join('');
+        } else if (data.labBatchCount > 1) {
+            // Fallback: generate from count and prefix
+            const batches = generateBatchNames(data.labBatchCount, data.labBatchPrefix || 'A');
+            labBatchesHtml = batches.map(b =>
+                `<span class="badge bg-info me-1">${escapeHtml(b)}</span>`
+            ).join('');
+        }
+
         return `
             <tr>
-                <td><strong>${id}</strong></td>
-                <td>${data.name}</td>
+                <td><strong>${escapeHtml(id)}</strong></td>
+                <td>${escapeHtml(data.name)}</td>
                 <td>${batchName}</td>
-                <td>${data.dept}</td>
+                <td>${escapeHtml(data.dept)}</td>
+                <td>${labBatchesHtml}</td>
                 <td class="actions">
-                    <button class="btn btn-sm btn-outline-primary btn-action" onclick="editClass('${id}')">
+                    <button class="btn btn-sm btn-outline-primary btn-action" onclick="editClass('${escapeHtml(id)}')">
                         <i class="bi bi-pencil"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteClass('${id}')">
+                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteClass('${escapeHtml(id)}')">
                         <i class="bi bi-trash"></i>
                     </button>
                 </td>
@@ -431,15 +484,36 @@ function renderClassesTable() {
     }).join('');
 }
 
+// Helper function to escape HTML to prevent XSS
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
 async function addClass() {
     const classId = document.getElementById('classId').value.trim();
     const name = document.getElementById('className').value.trim();
     const dept = document.getElementById('classDept').value.trim();
     const batchId = document.getElementById('classBatch').value || null;
 
-    console.log('Attempting to add class:', { classId, name, dept, batchId });
+    // Lab batch configuration
+    const labBatchCount = parseInt(document.getElementById('classBatchCount').value) || 1;
+    const labBatchPrefix = document.getElementById('classBatchPrefix').value.trim() || 'A';
+    const studentsPerBatch = parseInt(document.getElementById('classStudentsPerBatch').value) || 15;
+    const labBatches = generateBatchNames(labBatchCount, labBatchPrefix);
 
-    const classData = { name, dept };
+    console.log('Attempting to add class:', { classId, name, dept, batchId, labBatchCount, labBatches });
+
+    const classData = {
+        name,
+        dept,
+        labBatchCount,
+        labBatchPrefix,
+        labBatches,
+        studentsPerBatch
+    };
     if (batchId) {
         classData.batchId = batchId;
     }
@@ -449,6 +523,8 @@ async function addClass() {
         console.log('Class added successfully:', classId);
         showToast('Class added successfully!', 'success');
         document.getElementById('classForm').reset();
+        // Reset batch preview
+        updateBatchPreview();
     } catch (error) {
         console.error('Error adding class:', { code: error.code, message: error.message, error });
         showToast('Error adding class: ' + error.message, 'danger');
@@ -471,13 +547,23 @@ function editClass(classId) {
         `<option value="${id}" ${data.batchId === id ? 'selected' : ''}>${batch.name} (${batch.academicYear})</option>`
     ).join('');
 
+    // Lab batch configuration
+    const labBatchCount = data.labBatchCount || 1;
+    const labBatchPrefix = data.labBatchPrefix || 'A';
+    const studentsPerBatch = data.studentsPerBatch || 15;
+
+    // Build batch count options
+    const batchCountOptions = [1, 2, 3, 4, 5, 6].map(n =>
+        `<option value="${n}" ${labBatchCount === n ? 'selected' : ''}>${n === 1 ? '1 (No batches)' : n + ' Batches'}</option>`
+    ).join('');
+
     showEditModal('Edit Class', `
         <div class="mb-3">
             <label class="form-label">Class ID</label>
-            <input type="text" class="form-control" id="editClassId" value="${classId}" readonly>
+            <input type="text" class="form-control" id="editClassId" value="${escapeHtml(classId)}" readonly>
         </div>
         <div class="mb-3">
-            <label class="form-label">Batch</label>
+            <label class="form-label">Academic Batch</label>
             <select class="form-select" id="editClassBatch">
                 <option value="">No Batch</option>
                 ${batchOptions}
@@ -485,7 +571,7 @@ function editClass(classId) {
         </div>
         <div class="mb-3">
             <label class="form-label">Class Name</label>
-            <input type="text" class="form-control" id="editClassName" value="${data.name}" required>
+            <input type="text" class="form-control" id="editClassName" value="${escapeHtml(data.name)}" required>
         </div>
         <div class="mb-3">
             <label class="form-label">Department</label>
@@ -494,13 +580,71 @@ function editClass(classId) {
                 ${deptOptions}
             </select>
         </div>
+        <hr>
+        <h6 class="text-muted mb-3"><i class="bi bi-collection"></i> Lab Batch Configuration</h6>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label class="form-label">Lab Batch Count</label>
+                <select class="form-select" id="editClassBatchCount" onchange="updateEditBatchPreview()">
+                    ${batchCountOptions}
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label class="form-label">Batch Prefix</label>
+                <input type="text" class="form-control" id="editClassBatchPrefix" value="${escapeHtml(labBatchPrefix)}" maxlength="2" onkeyup="updateEditBatchPreview()">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label class="form-label">Students/Batch</label>
+                <input type="number" class="form-control" id="editClassStudentsPerBatch" value="${studentsPerBatch}" min="1" max="100">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Lab Batches Preview</label>
+            <div id="editBatchPreview" class="form-control bg-light"></div>
+        </div>
     `, async () => {
         const name = document.getElementById('editClassName').value.trim();
         const dept = document.getElementById('editClassDept').value;
         const batchId = document.getElementById('editClassBatch').value || null;
-        await database.ref(`classes/${classId}`).update({ name, dept, batchId });
+        const labBatchCount = parseInt(document.getElementById('editClassBatchCount').value) || 1;
+        const labBatchPrefix = document.getElementById('editClassBatchPrefix').value.trim() || 'A';
+        const studentsPerBatch = parseInt(document.getElementById('editClassStudentsPerBatch').value) || 15;
+        const labBatches = generateBatchNames(labBatchCount, labBatchPrefix);
+
+        await database.ref(`classes/${classId}`).update({
+            name, dept, batchId, labBatchCount, labBatchPrefix, labBatches, studentsPerBatch
+        });
         showToast('Class updated successfully!', 'success');
     });
+
+    // Initialize batch preview after modal is shown
+    setTimeout(() => updateEditBatchPreview(), 100);
+}
+
+// Update batch preview in edit modal
+function updateEditBatchPreview() {
+    const count = parseInt(document.getElementById('editClassBatchCount')?.value) || 1;
+    const prefix = document.getElementById('editClassBatchPrefix')?.value || 'A';
+    const preview = document.getElementById('editBatchPreview');
+
+    if (!preview) return;
+
+    preview.textContent = '';
+
+    if (count <= 1) {
+        const span = document.createElement('span');
+        span.className = 'text-muted';
+        span.textContent = 'No lab batches';
+        preview.appendChild(span);
+        return;
+    }
+
+    for (let i = 1; i <= count; i++) {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-primary me-1';
+        badge.textContent = `${prefix}${i}`;
+        preview.appendChild(badge);
+    }
 }
 
 async function deleteClass(classId) {
@@ -766,9 +910,19 @@ function renderSubjectsTable() {
         const className = classesData[data.classId]?.name || data.classId;
         const teacherName = teachersData[data.teacherId]?.name || data.teacherId;
         const subjectType = data.type || 'theory';
-        const typeLabel = subjectType === 'practical'
-            ? `<span class="badge bg-success">Practical</span>`
-            : `<span class="badge bg-primary">Theory</span>`;
+
+        // Type label with batch indicator
+        let typeLabel;
+        if (subjectType === 'practical') {
+            if (data.isBatchBased) {
+                typeLabel = `<span class="badge bg-success">Practical</span> <span class="badge bg-info">Batch</span>`;
+            } else {
+                typeLabel = `<span class="badge bg-success">Practical</span>`;
+            }
+        } else {
+            typeLabel = `<span class="badge bg-primary">Theory</span>`;
+        }
+
         const sessions = subjectType === 'practical'
             ? `${data.lecturesPerWeek} (${data.practicalDuration || 2}h each)`
             : data.lecturesPerWeek;
@@ -781,11 +935,11 @@ function renderSubjectsTable() {
 
         return `
             <tr>
-                <td><strong>${data.code || id}</strong></td>
-                <td>${data.name}</td>
+                <td><strong>${escapeHtml(data.code || id)}</strong></td>
+                <td>${escapeHtml(data.name)}</td>
                 <td>${typeLabel}</td>
-                <td>${className}</td>
-                <td>${teacherName}</td>
+                <td>${escapeHtml(className)}</td>
+                <td>${escapeHtml(teacherName)}</td>
                 <td>${sessions}</td>
                 <td>
                     <div class="progress" style="height: 20px; min-width: 100px;">
@@ -797,10 +951,10 @@ function renderSubjectsTable() {
                     </div>
                 </td>
                 <td class="actions">
-                    <button class="btn btn-sm btn-outline-primary btn-action" onclick="editSubject('${id}')">
+                    <button class="btn btn-sm btn-outline-primary btn-action" onclick="editSubject('${escapeHtml(id)}')">
                         <i class="bi bi-pencil"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteSubject('${id}')">
+                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteSubject('${escapeHtml(id)}')">
                         <i class="bi bi-trash"></i>
                     </button>
                 </td>
@@ -840,10 +994,136 @@ function populateSubjectDropdowns() {
 function togglePracticalFields() {
     const subjectType = document.getElementById('subjectType').value;
     const practicalFields = document.getElementById('practicalFields');
+    const singleLabFields = document.getElementById('singleLabFields');
+    const batchBasedFields = document.getElementById('batchBasedFields');
+    const isBatchBasedCheckbox = document.getElementById('isBatchBased');
+
     if (practicalFields) {
         practicalFields.style.display = subjectType === 'practical' ? 'flex' : 'none';
     }
+
+    // Reset batch-based when switching away from practical
+    if (subjectType !== 'practical') {
+        if (singleLabFields) singleLabFields.style.display = 'none';
+        if (batchBasedFields) batchBasedFields.style.display = 'none';
+        if (isBatchBasedCheckbox) isBatchBasedCheckbox.checked = false;
+    } else {
+        // Show single lab fields by default
+        toggleBatchBasedFields();
+    }
 }
+
+// Toggle batch-based practical fields
+function toggleBatchBasedFields() {
+    const isBatchBased = document.getElementById('isBatchBased')?.checked || false;
+    const singleLabFields = document.getElementById('singleLabFields');
+    const batchBasedFields = document.getElementById('batchBasedFields');
+
+    if (singleLabFields) {
+        singleLabFields.style.display = isBatchBased ? 'none' : 'flex';
+    }
+
+    if (batchBasedFields) {
+        batchBasedFields.style.display = isBatchBased ? 'block' : 'none';
+        if (isBatchBased) {
+            populateBatchAssignments();
+        }
+    }
+}
+
+// Populate batch assignment rows based on selected class
+function populateBatchAssignments() {
+    const classId = document.getElementById('subjectClass').value;
+    const container = document.getElementById('batchAssignmentsContainer');
+
+    if (!container) return;
+
+    if (!classId) {
+        container.textContent = '';
+        const msg = document.createElement('p');
+        msg.className = 'text-muted';
+        msg.textContent = 'Select a class first to see available batches.';
+        container.appendChild(msg);
+        return;
+    }
+
+    const classData = classesData[classId];
+    const batches = classData?.labBatches || [];
+
+    if (batches.length === 0) {
+        container.textContent = '';
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-warning';
+        alert.textContent = 'This class has no lab batches configured. Go to Classes section to add batches.';
+        container.appendChild(alert);
+        return;
+    }
+
+    // Build teacher options
+    const teacherOptions = Object.entries(teachersData).map(([id, data]) =>
+        `<option value="${escapeHtml(id)}">${escapeHtml(data.name)}</option>`
+    ).join('');
+
+    // Build lab options
+    const labOptions = Object.entries(roomsData)
+        .filter(([_, room]) => room.type === 'lab')
+        .map(([id, data]) =>
+            `<option value="${escapeHtml(id)}">${escapeHtml(data.name)}</option>`
+        ).join('');
+
+    // Clear container
+    container.textContent = '';
+
+    // Create rows for each batch
+    const table = document.createElement('table');
+    table.className = 'table table-sm table-bordered';
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr class="table-light">
+            <th style="width: 100px;">Batch</th>
+            <th>Teacher</th>
+            <th>Lab Room</th>
+        </tr>
+    `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    batches.forEach(batch => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><span class="badge bg-primary">${escapeHtml(batch)}</span></td>
+            <td>
+                <select class="form-select form-select-sm" id="batchTeacher_${escapeHtml(batch)}" required>
+                    <option value="">Select Teacher</option>
+                    ${teacherOptions}
+                </select>
+            </td>
+            <td>
+                <select class="form-select form-select-sm" id="batchLab_${escapeHtml(batch)}" required>
+                    <option value="">Select Lab</option>
+                    ${labOptions}
+                </select>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+}
+
+// Listen for class selection changes to update batch assignments
+document.addEventListener('DOMContentLoaded', () => {
+    const classSelect = document.getElementById('subjectClass');
+    if (classSelect) {
+        classSelect.addEventListener('change', () => {
+            const isBatchBased = document.getElementById('isBatchBased')?.checked;
+            if (isBatchBased) {
+                populateBatchAssignments();
+            }
+        });
+    }
+});
 
 async function addSubject() {
     const subjectId = document.getElementById('subjectId').value.trim();
@@ -868,8 +1148,37 @@ async function addSubject() {
 
     // Add practical-specific fields
     if (subjectType === 'practical') {
-        subjectData.labRoomId = document.getElementById('labRoom').value || null;
         subjectData.practicalDuration = parseInt(document.getElementById('practicalDuration').value) || 2;
+
+        const isBatchBased = document.getElementById('isBatchBased')?.checked || false;
+        subjectData.isBatchBased = isBatchBased;
+
+        if (isBatchBased) {
+            // Collect batch teacher/lab assignments
+            const classData = classesData[classId];
+            const batches = classData?.labBatches || [];
+
+            const batchTeachers = {};
+            const batchLabs = {};
+
+            for (const batch of batches) {
+                const teacherSelect = document.getElementById(`batchTeacher_${batch}`);
+                const labSelect = document.getElementById(`batchLab_${batch}`);
+
+                if (teacherSelect && teacherSelect.value) {
+                    batchTeachers[batch] = teacherSelect.value;
+                }
+                if (labSelect && labSelect.value) {
+                    batchLabs[batch] = labSelect.value;
+                }
+            }
+
+            subjectData.batchTeachers = batchTeachers;
+            subjectData.batchLabs = batchLabs;
+        } else {
+            // Single lab for all
+            subjectData.labRoomId = document.getElementById('labRoom').value || null;
+        }
     }
 
     console.log('Attempting to add subject:', subjectData);
@@ -880,6 +1189,8 @@ async function addSubject() {
         showToast('Subject added successfully!', 'success');
         document.getElementById('subjectForm').reset();
         document.getElementById('practicalFields').style.display = 'none';
+        document.getElementById('singleLabFields').style.display = 'none';
+        document.getElementById('batchBasedFields').style.display = 'none';
     } catch (error) {
         console.error('Error adding subject:', { code: error.code, message: error.message, error });
         showToast('Error adding subject: ' + error.message, 'danger');
@@ -889,38 +1200,42 @@ async function addSubject() {
 function editSubject(subjectId) {
     const data = subjectsData[subjectId];
     const subjectType = data.type || 'theory';
+    const isBatchBased = data.isBatchBased || false;
 
-    // Build class options
+    // Build class options - using escapeHtml for safety
     const classOptions = Object.entries(classesData).map(([id, cls]) =>
-        `<option value="${id}" ${id === data.classId ? 'selected' : ''}>${cls.name} (${id})</option>`
+        `<option value="${escapeHtml(id)}" ${id === data.classId ? 'selected' : ''}>${escapeHtml(cls.name)} (${escapeHtml(id)})</option>`
     ).join('');
 
-    // Build teacher options
+    // Build teacher options (for default teacher)
     const teacherOptions = Object.entries(teachersData).map(([id, teacher]) =>
-        `<option value="${id}" ${id === data.teacherId ? 'selected' : ''}>${teacher.name} (${id})</option>`
+        `<option value="${escapeHtml(id)}" ${id === data.teacherId ? 'selected' : ''}>${escapeHtml(teacher.name)} (${escapeHtml(id)})</option>`
     ).join('');
 
     // Build lab room options
     const labOptions = Object.entries(roomsData)
         .filter(([_, room]) => room.type === 'lab')
         .map(([id, room]) =>
-            `<option value="${id}" ${id === data.labRoomId ? 'selected' : ''}>${room.name} (${id})</option>`
+            `<option value="${escapeHtml(id)}" ${id === data.labRoomId ? 'selected' : ''}>${escapeHtml(room.name)} (${escapeHtml(id)})</option>`
         ).join('');
 
     const practicalDuration = data.practicalDuration || 2;
 
+    // Store subject data for batch assignment population
+    window._editSubjectData = data;
+
     showEditModal('Edit Subject', `
         <div class="mb-3">
             <label class="form-label">Subject ID</label>
-            <input type="text" class="form-control" id="editSubjectId" value="${subjectId}" readonly>
+            <input type="text" class="form-control" id="editSubjectId" value="${escapeHtml(subjectId)}" readonly>
         </div>
         <div class="mb-3">
             <label class="form-label">Subject Code</label>
-            <input type="text" class="form-control" id="editSubjectCode" value="${data.code || ''}" required>
+            <input type="text" class="form-control" id="editSubjectCode" value="${escapeHtml(data.code || '')}" required>
         </div>
         <div class="mb-3">
             <label class="form-label">Subject Name</label>
-            <input type="text" class="form-control" id="editSubjectName" value="${data.name}" required>
+            <input type="text" class="form-control" id="editSubjectName" value="${escapeHtml(data.name)}" required>
         </div>
         <div class="mb-3">
             <label class="form-label">Subject Type</label>
@@ -931,17 +1246,18 @@ function editSubject(subjectId) {
         </div>
         <div class="mb-3">
             <label class="form-label">Class</label>
-            <select class="form-select" id="editSubjectClass" required>
+            <select class="form-select" id="editSubjectClass" required onchange="populateEditBatchAssignments()">
                 <option value="">Select Class</option>
                 ${classOptions}
             </select>
         </div>
         <div class="mb-3">
-            <label class="form-label">Teacher</label>
+            <label class="form-label">Default Teacher</label>
             <select class="form-select" id="editSubjectTeacher" required>
                 <option value="">Select Teacher</option>
                 ${teacherOptions}
             </select>
+            <small class="text-muted">Used for theory or non-batch practicals</small>
         </div>
         <div class="row">
             <div class="col-md-6 mb-3">
@@ -955,18 +1271,39 @@ function editSubject(subjectId) {
         </div>
         <div id="editPracticalFields" style="display: ${subjectType === 'practical' ? 'block' : 'none'};">
             <div class="mb-3">
-                <label class="form-label">Lab Room</label>
-                <select class="form-select" id="editLabRoom">
-                    <option value="">Select Lab</option>
-                    ${labOptions}
-                </select>
-            </div>
-            <div class="mb-3">
                 <label class="form-label">Duration (Periods)</label>
                 <select class="form-select" id="editPracticalDuration">
                     <option value="2" ${practicalDuration === 2 ? 'selected' : ''}>2 Periods (2 hours)</option>
                     <option value="3" ${practicalDuration === 3 ? 'selected' : ''}>3 Periods (3 hours)</option>
                 </select>
+            </div>
+            <div class="mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="editIsBatchBased" ${isBatchBased ? 'checked' : ''} onchange="toggleEditBatchBasedFields()">
+                    <label class="form-check-label" for="editIsBatchBased">
+                        <strong>Batch-Based Practical</strong>
+                    </label>
+                </div>
+                <small class="text-muted">Different teachers/labs per batch</small>
+            </div>
+            <!-- Non-batch lab room -->
+            <div id="editSingleLabFields" style="display: ${!isBatchBased ? 'block' : 'none'};">
+                <div class="mb-3">
+                    <label class="form-label">Lab Room</label>
+                    <select class="form-select" id="editLabRoom">
+                        <option value="">Select Lab</option>
+                        ${labOptions}
+                    </select>
+                </div>
+            </div>
+            <!-- Batch-based fields -->
+            <div id="editBatchBasedFields" style="display: ${isBatchBased ? 'block' : 'none'};">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i> Assign teachers and labs for each batch.
+                </div>
+                <div id="editBatchAssignmentsContainer">
+                    <p class="text-muted">Loading batch assignments...</p>
+                </div>
             </div>
         </div>
     `, async () => {
@@ -981,17 +1318,57 @@ function editSubject(subjectId) {
         const updateData = { code, name, type, classId, teacherId, lecturesPerWeek, totalLectures };
 
         if (type === 'practical') {
-            updateData.labRoomId = document.getElementById('editLabRoom').value || null;
             updateData.practicalDuration = parseInt(document.getElementById('editPracticalDuration').value) || 2;
+            const isBatchBasedChecked = document.getElementById('editIsBatchBased')?.checked || false;
+            updateData.isBatchBased = isBatchBasedChecked;
+
+            if (isBatchBasedChecked) {
+                // Collect batch teacher/lab assignments
+                const classData = classesData[classId];
+                const batches = classData?.labBatches || [];
+
+                const batchTeachers = {};
+                const batchLabs = {};
+
+                for (const batch of batches) {
+                    const teacherSelect = document.getElementById(`editBatchTeacher_${batch}`);
+                    const labSelect = document.getElementById(`editBatchLab_${batch}`);
+
+                    if (teacherSelect && teacherSelect.value) {
+                        batchTeachers[batch] = teacherSelect.value;
+                    }
+                    if (labSelect && labSelect.value) {
+                        batchLabs[batch] = labSelect.value;
+                    }
+                }
+
+                updateData.batchTeachers = batchTeachers;
+                updateData.batchLabs = batchLabs;
+                updateData.labRoomId = null; // Clear single lab
+            } else {
+                updateData.labRoomId = document.getElementById('editLabRoom').value || null;
+                updateData.batchTeachers = null;
+                updateData.batchLabs = null;
+            }
         } else {
             // Clear practical fields if changed to theory
             updateData.labRoomId = null;
             updateData.practicalDuration = null;
+            updateData.isBatchBased = false;
+            updateData.batchTeachers = null;
+            updateData.batchLabs = null;
         }
 
         await database.ref(`subjects/${subjectId}`).update(updateData);
         showToast('Subject updated successfully!', 'success');
     });
+
+    // Populate batch assignments after modal is shown
+    setTimeout(() => {
+        if (isBatchBased) {
+            populateEditBatchAssignments();
+        }
+    }, 100);
 }
 
 // Toggle practical fields in edit modal
@@ -1001,6 +1378,148 @@ function toggleEditPracticalFields() {
     if (practicalFields) {
         practicalFields.style.display = subjectType === 'practical' ? 'block' : 'none';
     }
+    // Reset batch-based when switching
+    if (subjectType !== 'practical') {
+        const singleLabFields = document.getElementById('editSingleLabFields');
+        const batchBasedFields = document.getElementById('editBatchBasedFields');
+        const isBatchBasedCheckbox = document.getElementById('editIsBatchBased');
+        if (singleLabFields) singleLabFields.style.display = 'none';
+        if (batchBasedFields) batchBasedFields.style.display = 'none';
+        if (isBatchBasedCheckbox) isBatchBasedCheckbox.checked = false;
+    } else {
+        toggleEditBatchBasedFields();
+    }
+}
+
+// Toggle batch-based fields in edit modal
+function toggleEditBatchBasedFields() {
+    const isBatchBasedChecked = document.getElementById('editIsBatchBased')?.checked || false;
+    const singleLabFields = document.getElementById('editSingleLabFields');
+    const batchBasedFields = document.getElementById('editBatchBasedFields');
+
+    if (singleLabFields) {
+        singleLabFields.style.display = isBatchBasedChecked ? 'none' : 'block';
+    }
+
+    if (batchBasedFields) {
+        batchBasedFields.style.display = isBatchBasedChecked ? 'block' : 'none';
+        if (isBatchBasedChecked) {
+            populateEditBatchAssignments();
+        }
+    }
+}
+
+// Populate batch assignment rows in edit modal - using safe DOM methods
+function populateEditBatchAssignments() {
+    const classId = document.getElementById('editSubjectClass').value;
+    const container = document.getElementById('editBatchAssignmentsContainer');
+    const subjectData = window._editSubjectData || {};
+
+    if (!container) return;
+
+    // Clear container safely
+    container.textContent = '';
+
+    if (!classId) {
+        const msg = document.createElement('p');
+        msg.className = 'text-muted';
+        msg.textContent = 'Select a class first to see available batches.';
+        container.appendChild(msg);
+        return;
+    }
+
+    const classData = classesData[classId];
+    const batches = classData?.labBatches || [];
+
+    if (batches.length === 0) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-warning';
+        alert.textContent = 'This class has no lab batches configured.';
+        container.appendChild(alert);
+        return;
+    }
+
+    // Get existing batch assignments
+    const existingBatchTeachers = subjectData.batchTeachers || {};
+    const existingBatchLabs = subjectData.batchLabs || {};
+
+    // Create table for batch assignments using DOM methods
+    const table = document.createElement('table');
+    table.className = 'table table-sm table-bordered';
+
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    headerRow.className = 'table-light';
+    ['Batch', 'Teacher', 'Lab Room'].forEach(text => {
+        const th = document.createElement('th');
+        th.textContent = text;
+        if (text === 'Batch') th.style.width = '80px';
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    batches.forEach(batch => {
+        const selectedTeacher = existingBatchTeachers[batch] || '';
+        const selectedLab = existingBatchLabs[batch] || '';
+
+        const row = document.createElement('tr');
+
+        // Batch cell
+        const batchCell = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-primary';
+        badge.textContent = batch;
+        batchCell.appendChild(badge);
+        row.appendChild(batchCell);
+
+        // Teacher select cell
+        const teacherCell = document.createElement('td');
+        const teacherSelect = document.createElement('select');
+        teacherSelect.className = 'form-select form-select-sm';
+        teacherSelect.id = `editBatchTeacher_${batch}`;
+
+        const defaultTeacherOpt = document.createElement('option');
+        defaultTeacherOpt.value = '';
+        defaultTeacherOpt.textContent = 'Select Teacher';
+        teacherSelect.appendChild(defaultTeacherOpt);
+
+        Object.entries(teachersData).forEach(([id, tData]) => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = tData.name;
+            if (id === selectedTeacher) opt.selected = true;
+            teacherSelect.appendChild(opt);
+        });
+        teacherCell.appendChild(teacherSelect);
+        row.appendChild(teacherCell);
+
+        // Lab select cell
+        const labCell = document.createElement('td');
+        const labSelect = document.createElement('select');
+        labSelect.className = 'form-select form-select-sm';
+        labSelect.id = `editBatchLab_${batch}`;
+
+        const defaultLabOpt = document.createElement('option');
+        defaultLabOpt.value = '';
+        defaultLabOpt.textContent = 'Select Lab';
+        labSelect.appendChild(defaultLabOpt);
+
+        Object.entries(roomsData).filter(([_, room]) => room.type === 'lab').forEach(([id, rData]) => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = rData.name;
+            if (id === selectedLab) opt.selected = true;
+            labSelect.appendChild(opt);
+        });
+        labCell.appendChild(labSelect);
+        row.appendChild(labCell);
+
+        tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
 }
 
 async function deleteSubject(subjectId) {
@@ -1033,7 +1552,7 @@ function renderSlotsTable() {
 
     // Sort slots by day and period order
     const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    const periodOrder = [1, 2, 3, 'B1', 4, 5, 6, 'B2', 7, 8];
+    const periodOrder = [1, 2, 3, 4, 'B1', 5, 6, 7, 'B2', 8, 9];
     slots.sort((a, b) => {
         const dayDiff = dayOrder.indexOf(a[1].day) - dayOrder.indexOf(b[1].day);
         if (dayDiff !== 0) return dayDiff;
@@ -1064,23 +1583,26 @@ function renderSlotsTable() {
 
 async function generateDefaultSlots() {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    // 9am to 5pm schedule with breaks
-    // Morning: P1, P2, P3 (9:00-12:00), then 30 min break
-    // Afternoon: P4, P5, P6 (12:30-3:30), then 30 min break
-    // Evening: P7, P8 (4:00-6:00)
+    // 8:15am to 5:45pm schedule with breaks
+    // Morning: P1-P4 (8:15-12:15), then 1hr lunch break
+    // Afternoon: P5-P7 (13:15-16:15), then 15 min short break
+    // Evening: P8-P9 (16:30-18:30)
+    // Practical slots: P5-P6 (13:15-15:15) or P6-P7 (14:15-16:15) for 2-hour practicals
     const periods = [
-        { period: 1, start: '09:00', end: '10:00', type: 'class' },
-        { period: 2, start: '10:00', end: '11:00', type: 'class' },
-        { period: 3, start: '11:00', end: '12:00', type: 'class' },
-        { period: 'B1', start: '12:00', end: '12:30', type: 'break', label: 'Short Break' },
-        { period: 4, start: '12:30', end: '13:30', type: 'class' },
-        { period: 5, start: '13:30', end: '14:30', type: 'class' },
-        { period: 6, start: '14:30', end: '15:30', type: 'class' },
-        { period: 'B2', start: '15:30', end: '16:00', type: 'break', label: 'Short Break' },
-        { period: 7, start: '16:00', end: '17:00', type: 'class' }
+        { period: 1, start: '08:15', end: '09:15', type: 'class' },
+        { period: 2, start: '09:15', end: '10:15', type: 'class' },
+        { period: 3, start: '10:15', end: '11:15', type: 'class' },
+        { period: 4, start: '11:15', end: '12:15', type: 'class' },
+        { period: 'B1', start: '12:15', end: '13:15', type: 'break', label: 'Lunch Break' },
+        { period: 5, start: '13:15', end: '14:15', type: 'class' },
+        { period: 6, start: '14:15', end: '15:15', type: 'class' },
+        { period: 7, start: '15:15', end: '16:15', type: 'class' },
+        { period: 'B2', start: '16:15', end: '16:30', type: 'break', label: 'Short Break' },
+        { period: 8, start: '16:30', end: '17:30', type: 'class' },
+        { period: 9, start: '17:30', end: '18:30', type: 'class' }
     ];
 
-    console.log('Generating default time slots (9am-5pm with breaks)...');
+    console.log('Generating default time slots (8:15am-5:45pm with breaks)...');
 
     try {
         const updates = {};
@@ -1138,6 +1660,52 @@ function populateTimetableDropdown() {
     Object.entries(classesData).forEach(([id, data]) => {
         select.innerHTML += `<option value="${id}">${data.name} (${id})</option>`;
     });
+
+    // Also populate batch filter dropdown when class changes
+    select.addEventListener('change', populateBatchFilterDropdown);
+}
+
+// Populate batch filter dropdown based on selected class
+function populateBatchFilterDropdown() {
+    const classSelect = document.getElementById('timetableClass');
+    const batchSelect = document.getElementById('timetableBatchFilter');
+
+    if (!batchSelect) return;
+
+    const classId = classSelect.value;
+    batchSelect.innerHTML = '<option value="">All Batches</option>';
+
+    if (!classId) {
+        batchSelect.disabled = true;
+        return;
+    }
+
+    const classData = classesData[classId];
+    const batches = classData?.labBatches || [];
+
+    if (batches.length === 0) {
+        batchSelect.disabled = true;
+        return;
+    }
+
+    batchSelect.disabled = false;
+    batches.forEach(batch => {
+        batchSelect.innerHTML += `<option value="${escapeHtml(batch)}">${escapeHtml(batch)}</option>`;
+    });
+}
+
+// Filter timetable display by batch
+async function filterTimetableByBatch() {
+    const classSelect = document.getElementById('timetableClass');
+    const batchSelect = document.getElementById('timetableBatchFilter');
+
+    const classId = classSelect.value;
+    const batchFilter = batchSelect.value;
+
+    if (!classId) return;
+
+    // Re-display timetable with batch filter
+    await displayTimetableWithBatchFilter(classId, batchFilter);
 }
 
 // Load and display existing timetables
@@ -2342,9 +2910,310 @@ function showTimetableActions(classId, timetableData) {
 
     document.getElementById('saveDraftBtn').style.display = 'inline-block';
     document.getElementById('publishBtn').style.display = 'inline-block';
+    document.getElementById('exportExcelBtn').style.display = 'inline-block';
 
     // Check existing status
     updateTimetableStatusBadge(classId);
+}
+
+// Export timetable to Excel using SheetJS (with batch-specific sheets)
+async function exportTimetableToExcel() {
+    if (!currentTimetableClassId) {
+        showToast('No timetable to export', 'danger');
+        return;
+    }
+
+    try {
+        // Fetch timetable and slots
+        const [timetableSnap, slotsSnap] = await Promise.all([
+            database.ref(`timetables/${currentTimetableClassId}`).once('value'),
+            database.ref('slots').once('value')
+        ]);
+
+        const timetable = timetableSnap.val() || {};
+        const slots = slotsSnap.val() || {};
+        const classData = classesData[currentTimetableClassId] || {};
+        const className = classData.name || currentTimetableClassId;
+        const labBatches = classData.labBatches || [];
+
+        // Build period info
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const periodOrder = [1, 2, 3, 4, 'B1', 5, 6, 7, 'B2', 8, 9];
+        const periodInfo = {};
+
+        Object.values(slots).forEach(slot => {
+            const key = slot.period;
+            if (!periodInfo[key]) {
+                periodInfo[key] = {
+                    period: slot.period,
+                    start: slot.start,
+                    end: slot.end,
+                    type: slot.type || 'class',
+                    label: slot.label
+                };
+            }
+        });
+
+        // Build ordered periods
+        const allPeriods = [];
+        periodOrder.forEach(p => {
+            if (periodInfo[p]) {
+                allPeriods.push(periodInfo[p]);
+            }
+        });
+
+        // Helper function to build worksheet data for a specific batch (or all batches)
+        function buildWorksheetData(batchFilter = null) {
+            const wsData = [];
+
+            // Header row
+            const headerRow = ['Day / Period'];
+            allPeriods.forEach(p => {
+                const isBreak = p.type === 'break';
+                const label = isBreak ? (p.label || 'Break') : `Period ${p.period}`;
+                headerRow.push(`${label}\n(${p.start} - ${p.end})`);
+            });
+            wsData.push(headerRow);
+
+            // Data rows for each day
+            days.forEach(day => {
+                const row = [day];
+
+                allPeriods.forEach(periodData => {
+                    const isBreak = periodData.type === 'break';
+
+                    if (isBreak) {
+                        row.push(periodData.label || 'Break');
+                    } else {
+                        const slotId = `${day.substring(0, 3)}-P${periodData.period}`;
+                        const entry = timetable[slotId];
+
+                        if (entry) {
+                            let cellContent = '';
+
+                            if (entry.subjectType === 'batch-practical' && entry.batchSchedule) {
+                                if (batchFilter) {
+                                    // Show only specific batch info (with batch-specific subject for round-robin)
+                                    const batchInfo = entry.batchSchedule[batchFilter];
+                                    if (batchInfo) {
+                                        // Use batch-specific subject name (round-robin support)
+                                        cellContent = batchInfo.subjectName || entry.subjectName || '';
+                                        cellContent += '\n[Lab - ' + batchFilter + ']\n' + batchInfo.teacherName + '\n' + batchInfo.roomName;
+                                    } else {
+                                        cellContent = entry.subjectName || 'Batch Practical';
+                                        cellContent += '\n[Lab]\nN/A';
+                                    }
+                                } else {
+                                    // Show all batches with their specific subjects (round-robin support)
+                                    cellContent = 'Batch Practicals';
+                                    const batchDetails = Object.entries(entry.batchSchedule)
+                                        .map(([batch, info]) => {
+                                            const subj = info.subjectName || entry.subjectName || '';
+                                            return `${batch}: ${subj} - ${info.teacherName} (${info.roomName})`;
+                                        })
+                                        .join('\n');
+                                    cellContent += '\n' + batchDetails;
+                                }
+                            } else if (entry.subjectType === 'practical') {
+                                cellContent = entry.subjectName || '';
+                                cellContent += '\n[Lab]\n' + (entry.teacherName || '') + '\n' + (entry.roomName || '');
+                            } else {
+                                cellContent = entry.subjectName || '';
+                                cellContent += '\n' + (entry.teacherName || '') + '\n' + (entry.roomName || '');
+                            }
+                            row.push(cellContent);
+                        } else {
+                            row.push('-');
+                        }
+                    }
+                });
+                wsData.push(row);
+            });
+
+            return wsData;
+        }
+
+        // Helper function to create worksheet with proper formatting
+        function createWorksheet(wsData) {
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Set column widths
+            const colWidths = [{ wch: 12 }]; // Day column
+            allPeriods.forEach(() => colWidths.push({ wch: 25 }));
+            ws['!cols'] = colWidths;
+
+            // Set row heights for better readability
+            ws['!rows'] = [{ hpt: 40 }]; // Header row height
+            days.forEach(() => ws['!rows'].push({ hpt: 80 }));
+
+            return ws;
+        }
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+
+        // Sheet 1: Main timetable with all batches
+        const mainWsData = buildWorksheetData(null);
+        const mainWs = createWorksheet(mainWsData);
+        XLSX.utils.book_append_sheet(wb, mainWs, (className + ' - All').substring(0, 31));
+
+        // Add separate sheets for each batch (if batches exist)
+        if (labBatches.length > 0) {
+            for (const batch of labBatches) {
+                const batchWsData = buildWorksheetData(batch);
+                const batchWs = createWorksheet(batchWsData);
+                const sheetName = (className + ' - ' + batch).substring(0, 31);
+                XLSX.utils.book_append_sheet(wb, batchWs, sheetName);
+            }
+        }
+
+        // Generate filename with date
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `Timetable_${className.replace(/[^a-zA-Z0-9]/g, '_')}_${date}.xlsx`;
+
+        // Download file
+        XLSX.writeFile(wb, filename);
+
+        const sheetCount = 1 + labBatches.length;
+        showToast(`Timetable exported: ${filename} (${sheetCount} sheet${sheetCount > 1 ? 's' : ''})`, 'success');
+    } catch (error) {
+        console.error('Export error:', error);
+        showToast('Error exporting timetable: ' + error.message, 'danger');
+    }
+}
+
+// Export all timetables to a single Excel file with multiple sheets
+async function exportAllTimetables() {
+    try {
+        showToast('Preparing export...', 'info');
+
+        // Fetch all data
+        const [timetablesSnap, slotsSnap, classesSnap] = await Promise.all([
+            database.ref('timetables').once('value'),
+            database.ref('slots').once('value'),
+            database.ref('classes').once('value')
+        ]);
+
+        const allTimetables = timetablesSnap.val() || {};
+        const slots = slotsSnap.val() || {};
+        const classes = classesSnap.val() || {};
+
+        const classIds = Object.keys(allTimetables).filter(id => {
+            // Filter out metadata keys
+            const data = allTimetables[id];
+            return typeof data === 'object' && !['status', 'updatedAt', 'publishedAt'].every(k => k in data && Object.keys(data).length === 3);
+        });
+
+        if (classIds.length === 0) {
+            showToast('No timetables to export', 'warning');
+            return;
+        }
+
+        // Build period info
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const periodOrder = [1, 2, 3, 4, 'B1', 5, 6, 7, 'B2', 8, 9];
+        const periodInfo = {};
+
+        Object.values(slots).forEach(slot => {
+            const key = slot.period;
+            if (!periodInfo[key]) {
+                periodInfo[key] = {
+                    period: slot.period,
+                    start: slot.start,
+                    end: slot.end,
+                    type: slot.type || 'class',
+                    label: slot.label
+                };
+            }
+        });
+
+        const allPeriods = [];
+        periodOrder.forEach(p => {
+            if (periodInfo[p]) {
+                allPeriods.push(periodInfo[p]);
+            }
+        });
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+
+        // Add a sheet for each class
+        for (const classId of classIds) {
+            const timetable = allTimetables[classId] || {};
+            const className = classes[classId]?.name || classId;
+
+            // Create worksheet data
+            const wsData = [];
+
+            // Header row
+            const headerRow = ['Day / Period'];
+            allPeriods.forEach(p => {
+                const isBreak = p.type === 'break';
+                const label = isBreak ? (p.label || 'Break') : `Period ${p.period}`;
+                headerRow.push(`${label}\n(${p.start} - ${p.end})`);
+            });
+            wsData.push(headerRow);
+
+            // Data rows for each day
+            days.forEach(day => {
+                const row = [day];
+
+                allPeriods.forEach(periodData => {
+                    const isBreak = periodData.type === 'break';
+
+                    if (isBreak) {
+                        row.push(periodData.label || 'Break');
+                    } else {
+                        const slotId = `${day.substring(0, 3)}-P${periodData.period}`;
+                        const entry = timetable[slotId];
+
+                        if (entry) {
+                            let cellContent = entry.subjectName || '';
+
+                            if (entry.subjectType === 'batch-practical' && entry.batchSchedule) {
+                                const batchInfo = Object.entries(entry.batchSchedule)
+                                    .map(([batch, info]) => `${batch}: ${info.teacherName} (${info.roomName})`)
+                                    .join('\n');
+                                cellContent += '\n[Batch Lab]\n' + batchInfo;
+                            } else if (entry.subjectType === 'practical') {
+                                cellContent += '\n[Lab]\n' + (entry.teacherName || '') + '\n' + (entry.roomName || '');
+                            } else {
+                                cellContent += '\n' + (entry.teacherName || '') + '\n' + (entry.roomName || '');
+                            }
+                            row.push(cellContent);
+                        } else {
+                            row.push('-');
+                        }
+                    }
+                });
+                wsData.push(row);
+            });
+
+            // Create worksheet
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Set column widths
+            const colWidths = [{ wch: 12 }];
+            allPeriods.forEach(() => colWidths.push({ wch: 25 }));
+            ws['!cols'] = colWidths;
+
+            // Sheet name (max 31 chars, no special chars)
+            const sheetName = className.replace(/[^a-zA-Z0-9 ]/g, '').substring(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        }
+
+        // Generate filename with date
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `All_Timetables_${date}.xlsx`;
+
+        // Download file
+        XLSX.writeFile(wb, filename);
+
+        showToast(`Exported ${classIds.length} timetables to ${filename}`, 'success');
+    } catch (error) {
+        console.error('Export all error:', error);
+        showToast('Error exporting timetables: ' + error.message, 'danger');
+    }
 }
 
 // Update status badge

@@ -332,6 +332,68 @@ body {
     background: linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%);
 }
 
+/* Batch-practical cells in timetable */
+.timetable .slot-cell.batch-practical-cell {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    border-left: 3px solid #3b82f6;
+    padding: 8px;
+}
+
+.timetable .slot-cell.batch-practical-cell .subject {
+    color: #1d4ed8;
+    font-size: 13px;
+}
+
+.timetable .slot-cell.batch-practical-cell:hover {
+    background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
+}
+
+.timetable .slot-cell.batch-practical-cell .batch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.timetable .slot-cell.batch-practical-cell .batch-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 3px;
+    border-radius: 4px;
+    font-size: 10px;
+}
+
+.timetable .slot-cell.batch-practical-cell .batch-item .badge {
+    font-size: 9px;
+    margin-bottom: 2px;
+}
+
+.timetable .slot-cell.batch-practical-cell .batch-item small {
+    line-height: 1.2;
+    text-align: center;
+}
+
+/* Round-robin batch subject name styling */
+.timetable .slot-cell.batch-practical-cell .batch-item .batch-subject {
+    font-size: 9px;
+    color: #1e40af;
+    font-weight: 600;
+    margin-bottom: 1px;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Student's own batch highlighting in "All Batches" view */
+.timetable .slot-cell.batch-practical-cell .batch-item.my-batch {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid #3b82f6;
+    box-shadow: 0 0 4px rgba(59, 130, 246, 0.3);
+}
+
 /* Form Styles */
 .form-section {
     background: white;

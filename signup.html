@@ -199,7 +199,7 @@
                 <!-- Student-specific Fields -->
                 <div id="studentFields" class="conditional-field">
                     <div class="mb-3">
-                        <label for="studentId" class="form-label">Student/Roll Number</label>
+                        <label for="studentId" class="form-label">Student/Enrollment ID</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-card-text"></i></span>
                             <input type="text" class="form-control" id="studentId" readonly placeholder="Will be auto-generated">
@@ -211,13 +211,33 @@
                         <label for="classId" class="form-label">Class <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-diagram-3"></i></span>
-                            <select class="form-select" id="classId">
+                            <select class="form-select" id="classId" onchange="updateLabBatchPreview()">
                                 <option value="">Select Your Class</option>
                                 <!-- Will be populated dynamically -->
                             </select>
                         </div>
                         <small class="text-muted">Select the class you are enrolled in</small>
                     </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rollNumber" class="form-label">Roll Number <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-123"></i></span>
+                                <input type="number" class="form-control" id="rollNumber" placeholder="e.g., 15" min="1" max="200" onchange="updateLabBatchPreview()">
+                            </div>
+                            <small class="text-muted">Your class roll number (1, 2, 3...)</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="labBatchPreview" class="form-label">Lab Batch (Auto-assigned)</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-collection"></i></span>
+                                <input type="text" class="form-control" id="labBatchPreview" readonly placeholder="Select class & roll number">
+                            </div>
+                            <small class="text-muted">Based on roll number</small>
+                        </div>
+                    </div>
+                    <input type="hidden" id="labBatch" name="labBatch">
 
                     <div class="mb-3">
                         <label for="semester" class="form-label">Current Semester <span class="text-danger">*</span></label>
@@ -349,6 +369,7 @@
             document.getElementById('facultyDesignation').required = false;
             document.getElementById('classId').required = false;
             document.getElementById('semester').required = false;
+            document.getElementById('rollNumber').required = false;
             document.getElementById('adminCode').required = false;
 
             // Set required only for the selected role's visible fields
@@ -359,6 +380,7 @@
                 document.getElementById('studentFields').classList.add('show');
                 document.getElementById('classId').required = true;
                 document.getElementById('semester').required = true;
+                document.getElementById('rollNumber').required = true;
                 loadClasses();
             } else if (role === 'admin') {
                 document.getElementById('adminFields').classList.add('show');
@@ -398,25 +420,89 @@
             return `${prefix}-${deptCode}-${year}-${paddedCount}`;
         }
 
+        // Store loaded classes data for batch calculation
+        let loadedClassesData = {};
+
         // Load available classes for student signup
         async function loadClasses() {
             try {
                 const snapshot = await database.ref('classes').once('value');
                 const classes = snapshot.val() || {};
+                loadedClassesData = classes;
                 const select = document.getElementById('classId');
 
-                select.innerHTML = '<option value="">Select Your Class</option>';
+                // Clear existing options
+                select.textContent = '';
 
+                // Add default option
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = 'Select Your Class';
+                select.appendChild(defaultOpt);
+
+                // Add class options
                 Object.entries(classes).forEach(([id, data]) => {
-                    select.innerHTML += `<option value="${id}">${data.name} (${data.dept})</option>`;
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = `${data.name} (${data.dept})`;
+                    select.appendChild(option);
                 });
 
                 if (Object.keys(classes).length === 0) {
-                    select.innerHTML += '<option value="" disabled>No classes available - contact admin</option>';
+                    const emptyOpt = document.createElement('option');
+                    emptyOpt.value = '';
+                    emptyOpt.disabled = true;
+                    emptyOpt.textContent = 'No classes available - contact admin';
+                    select.appendChild(emptyOpt);
                 }
             } catch (error) {
                 console.error('Error loading classes:', error);
             }
+        }
+
+        // Calculate lab batch based on roll number and class config
+        function calculateLabBatch(classId, rollNumber) {
+            const classData = loadedClassesData[classId];
+            if (!classData || !classData.labBatches || classData.labBatches.length === 0) {
+                return null; // No lab batches configured
+            }
+
+            const studentsPerBatch = classData.studentsPerBatch || 15;
+            const batchIndex = Math.floor((rollNumber - 1) / studentsPerBatch);
+
+            // Ensure index is within valid range
+            if (batchIndex >= 0 && batchIndex < classData.labBatches.length) {
+                return classData.labBatches[batchIndex];
+            }
+
+            // If roll number is too high, assign to last batch
+            return classData.labBatches[classData.labBatches.length - 1];
+        }
+
+        // Update lab batch preview when class or roll number changes
+        function updateLabBatchPreview() {
+            const classId = document.getElementById('classId').value;
+            const rollNumber = parseInt(document.getElementById('rollNumber').value) || 0;
+            const previewField = document.getElementById('labBatchPreview');
+            const hiddenField = document.getElementById('labBatch');
+
+            if (!classId || rollNumber <= 0) {
+                previewField.value = '';
+                hiddenField.value = '';
+                return;
+            }
+
+            const labBatch = calculateLabBatch(classId, rollNumber);
+
+            if (labBatch) {
+                previewField.value = labBatch;
+                hiddenField.value = labBatch;
+            } else {
+                previewField.value = 'No lab batches';
+                hiddenField.value = '';
+            }
+
+            validateForm();
         }
 
         // Toggle password visibility
@@ -552,6 +638,8 @@
                     userData.studentId = uniqueId;
                     userData.classId = document.getElementById('classId').value;
                     userData.semester = document.getElementById('semester').value;
+                    userData.rollNumber = parseInt(document.getElementById('rollNumber').value);
+                    userData.labBatch = document.getElementById('labBatch').value || null;
 
                     // Also create student entry for easy lookup
                     console.log('Creating student entry:', userData.studentId);
@@ -562,6 +650,8 @@
                             dept: userData.dept,
                             classId: userData.classId,
                             semester: userData.semester,
+                            rollNumber: userData.rollNumber,
+                            labBatch: userData.labBatch,
                             userId: user.uid
                         })
                     );
