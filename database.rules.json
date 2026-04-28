@@ -13,7 +13,7 @@
     "teachers": {
       ".read": "auth != null",
       "$teacherId": {
-        ".write": "auth != null"
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
       }
     },
 
@@ -21,6 +21,14 @@
       ".read": "auth != null",
       "$studentId": {
         ".write": "auth != null"
+      }
+    },
+
+    "batches": {
+      ".read": "auth != null",
+      "$batchId": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        ".validate": "newData.hasChildren(['academicYear', 'branch', 'semester', 'name', 'createdAt'])"
       }
     },
 
@@ -55,12 +63,29 @@
       ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
     },
 
+    "lectureRecords": {
+      ".read": "auth != null",
+      "$classId": {
+        "$date": {
+          "$slotId": {
+            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'faculty')",
+            ".validate": "newData.hasChildren(['status', 'scheduledTeacherId', 'actualTeacherId', 'subjectId', 'markedAt', 'markedBy'])"
+          }
+        }
+      }
+    },
+
     "notices": {
       ".read": "auth != null",
       "$noticeId": {
         ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'faculty')",
         ".validate": "newData.hasChildren(['title', 'content', 'priority', 'audience', 'authorId', 'authorName', 'authorRole', 'createdAt'])"
       }
+    },
+
+    "aiConfig": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
     },
 
     "counters": {

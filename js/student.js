@@ -2,7 +2,17 @@
 
 let currentClassId = null;
 let currentUserData = null;
+let currentLabBatch = null;
 let noticesData = {};
+let showAllBatchesView = false; // Toggle state for batch view
+
+// Helper function to escape HTML for display
+function escapeHtmlStudent(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
 
 // Initialize student dashboard
 document.addEventListener('DOMContentLoaded', async () => {
@@ -11,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { userData } = await checkAuthState('student');
         currentUserData = userData;
         currentClassId = userData.classId;
+        currentLabBatch = userData.labBatch || null;
 
         // Update UI with user info
         document.getElementById('userName').textContent = userData.name || 'Student';
@@ -29,6 +40,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('userClass').textContent = className;
         document.getElementById('classDisplayName').textContent = className;
+
+        // Show lab batch if assigned
+        if (currentLabBatch) {
+            const batchInfo = document.getElementById('userBatchInfo');
+            if (batchInfo) {
+                batchInfo.textContent = `Lab Batch: ${currentLabBatch}`;
+                batchInfo.style.display = 'inline-block';
+            }
+        }
 
         // Setup navigation
         setupNavigation();
@@ -87,22 +107,38 @@ async function loadStudentTimetable() {
     const loading = document.getElementById('loading');
 
     try {
-        // Fetch class timetable and slots
-        const [timetableSnap, slotsSnap] = await Promise.all([
+        // Fetch class timetable, slots, and class data
+        const [timetableSnap, slotsSnap, classSnap] = await Promise.all([
             database.ref(`timetables/${currentClassId}`).once('value'),
-            database.ref('slots').once('value')
+            database.ref('slots').once('value'),
+            database.ref(`classes/${currentClassId}`).once('value')
         ]);
 
         const timetable = timetableSnap.val() || {};
         const slots = slotsSnap.val() || {};
+        const classData = classSnap.val() || {};
+
+        // Check if class has lab batches - show/hide toggle
+        const batchViewToggle = document.getElementById('batchViewToggle');
+        const hasBatches = classData.labBatches && classData.labBatches.length > 0;
+        if (batchViewToggle) {
+            batchViewToggle.style.display = (hasBatches && currentLabBatch) ? 'block' : 'none';
+        }
 
         // Calculate stats
         const teachers = new Set();
         const subjects = new Set();
 
         Object.values(timetable).forEach(entry => {
-            teachers.add(entry.teacherId);
-            subjects.add(entry.subjectId);
+            if (entry && entry.teacherId) teachers.add(entry.teacherId);
+            if (entry && entry.subjectId) subjects.add(entry.subjectId);
+            // Also count batch schedule teachers/subjects
+            if (entry && entry.batchSchedule) {
+                Object.values(entry.batchSchedule).forEach(info => {
+                    if (info.teacherId) teachers.add(info.teacherId);
+                    if (info.subjectId) subjects.add(info.subjectId);
+                });
+            }
         });
 
         // Update stats
@@ -114,13 +150,19 @@ async function loadStudentTimetable() {
         loading.classList.remove('show');
 
         if (Object.keys(timetable).length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="bi bi-calendar-x"></i>
-                    <h5>No Schedule Found</h5>
-                    <p>The timetable for your class hasn't been generated yet. Please contact the administrator.</p>
-                </div>
-            `;
+            container.textContent = '';
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'empty-state';
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-calendar-x';
+            emptyDiv.appendChild(icon);
+            const h5 = document.createElement('h5');
+            h5.textContent = 'No Schedule Found';
+            emptyDiv.appendChild(h5);
+            const p = document.createElement('p');
+            p.textContent = "The timetable for your class hasn't been generated yet. Please contact the administrator.";
+            emptyDiv.appendChild(p);
+            container.appendChild(emptyDiv);
             return;
         }
 
@@ -130,12 +172,21 @@ async function loadStudentTimetable() {
     } catch (error) {
         console.error('Error loading timetable:', error);
         loading.classList.remove('show');
-        container.innerHTML = `
-            <div class="alert alert-danger">
-                <i class="bi bi-exclamation-triangle"></i> Error loading timetable: ${error.message}
-            </div>
-        `;
+        container.textContent = '';
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger';
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-exclamation-triangle';
+        alertDiv.appendChild(icon);
+        alertDiv.appendChild(document.createTextNode(' Error loading timetable: ' + (error.message || 'Unknown error')));
+        container.appendChild(alertDiv);
     }
+}
+
+// Toggle between "My Batch" and "All Batches" view
+function toggleBatchView() {
+    showAllBatchesView = document.getElementById('showAllBatches')?.checked || false;
+    loadStudentTimetable();
 }
 
 // Render timetable grid with breaks
@@ -145,7 +196,7 @@ function renderTimetable(timetable, slots) {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
     // Get all periods including breaks, sorted
-    const periodOrder = [1, 2, 3, 'B1', 4, 5, 6, 'B2', 7];
+    const periodOrder = [1, 2, 3, 4, 'B1', 5, 6, 7, 'B2', 8, 9];
     const allPeriods = [];
 
     // Build period info from slots
@@ -209,7 +260,7 @@ function renderTimetable(timetable, slots) {
 
             if (isBreak) {
                 html += `<td class="slot-cell break-cell">
-                    <div class="break-label">${periodData.label || 'Break'}</div>
+                    <div class="break-label">${escapeHtmlStudent(periodData.label) || 'Break'}</div>
                 </td>`;
             } else {
                 const slotId = `${day.substring(0, 3)}-P${periodData.period}`;
@@ -217,15 +268,85 @@ function renderTimetable(timetable, slots) {
 
                 if (entry) {
                     const isPractical = entry.subjectType === 'practical';
-                    const cellClass = isPractical ? 'practical-cell' : '';
-                    html += `
-                        <td class="slot-cell ${cellClass}">
-                            <div class="subject">${entry.subjectName}</div>
-                            ${isPractical ? '<span class="badge bg-success mb-1">Lab</span>' : ''}
-                            <div class="teacher"><i class="bi bi-person"></i> ${entry.teacherName}</div>
-                            <div class="room"><i class="bi bi-door-open"></i> ${entry.roomName}</div>
-                        </td>
-                    `;
+                    const isBatchPractical = entry.subjectType === 'batch-practical';
+
+                    if (isBatchPractical && entry.batchSchedule) {
+                        if (showAllBatchesView) {
+                            // Show all batches view (toggled on)
+                            const batchEntries = Object.entries(entry.batchSchedule);
+                            const uniqueSubjects = new Set(batchEntries.map(([_, info]) => info.subjectId));
+                            const isRoundRobin = uniqueSubjects.size > 1;
+
+                            let batchHtml = batchEntries.map(([batch, info]) => {
+                                const isMyBatch = batch === currentLabBatch;
+                                return `
+                                    <div class="batch-item ${isMyBatch ? 'my-batch' : ''}">
+                                        <span class="badge ${isMyBatch ? 'bg-primary' : 'bg-info'}">${escapeHtmlStudent(batch)}</span>
+                                        ${isRoundRobin ? `<strong class="batch-subject">${escapeHtmlStudent(info.subjectName)}</strong>` : ''}
+                                        <small>${escapeHtmlStudent(info.teacherName)}</small>
+                                        <small class="text-muted">${escapeHtmlStudent(info.roomName)}</small>
+                                    </div>
+                                `;
+                            }).join('');
+
+                            const headerSubject = isRoundRobin ? 'Batch Practicals' : escapeHtmlStudent(entry.subjectName);
+                            html += `
+                                <td class="slot-cell batch-practical-cell">
+                                    <div class="subject">${headerSubject}</div>
+                                    <span class="badge bg-success mb-1">${isRoundRobin ? 'Round-Robin' : 'All Batches'}</span>
+                                    <div class="batch-grid">${batchHtml}</div>
+                                </td>
+                            `;
+                        } else {
+                            // Show only student's batch view (default)
+                            const myBatchInfo = currentLabBatch ? entry.batchSchedule[currentLabBatch] : null;
+
+                            if (myBatchInfo) {
+                                // Use batch-specific subject name (for round-robin, this differs per batch)
+                                const subjectName = myBatchInfo.subjectName || entry.subjectName;
+                                html += `
+                                    <td class="slot-cell practical-cell">
+                                        <div class="subject">${escapeHtmlStudent(subjectName)}</div>
+                                        <span class="badge bg-success mb-1">Lab (${escapeHtmlStudent(currentLabBatch)})</span>
+                                        <div class="teacher"><i class="bi bi-person"></i> ${escapeHtmlStudent(myBatchInfo.teacherName)}</div>
+                                        <div class="room"><i class="bi bi-door-open"></i> ${escapeHtmlStudent(myBatchInfo.roomName)}</div>
+                                    </td>
+                                `;
+                            } else {
+                                // Student has no batch assigned or batch not in schedule - show overview
+                                const batchSummary = Object.entries(entry.batchSchedule)
+                                    .map(([batch, info]) => `${batch}: ${info.subjectName || entry.subjectName}`)
+                                    .join(', ');
+                                html += `
+                                    <td class="slot-cell practical-cell">
+                                        <div class="subject">Batch Practicals</div>
+                                        <span class="badge bg-warning text-dark mb-1">Lab</span>
+                                        <div class="text-muted small">${escapeHtmlStudent(batchSummary)}</div>
+                                        <div class="text-muted small"><i class="bi bi-info-circle"></i> Check your batch assignment</div>
+                                    </td>
+                                `;
+                            }
+                        }
+                    } else if (isPractical) {
+                        // Regular practical
+                        html += `
+                            <td class="slot-cell practical-cell">
+                                <div class="subject">${escapeHtmlStudent(entry.subjectName)}</div>
+                                <span class="badge bg-success mb-1">Lab</span>
+                                <div class="teacher"><i class="bi bi-person"></i> ${escapeHtmlStudent(entry.teacherName)}</div>
+                                <div class="room"><i class="bi bi-door-open"></i> ${escapeHtmlStudent(entry.roomName)}</div>
+                            </td>
+                        `;
+                    } else {
+                        // Theory
+                        html += `
+                            <td class="slot-cell">
+                                <div class="subject">${escapeHtmlStudent(entry.subjectName)}</div>
+                                <div class="teacher"><i class="bi bi-person"></i> ${escapeHtmlStudent(entry.teacherName)}</div>
+                                <div class="room"><i class="bi bi-door-open"></i> ${escapeHtmlStudent(entry.roomName)}</div>
+                            </td>
+                        `;
+                    }
                 } else {
                     html += `<td class="slot-cell empty">-</td>`;
                 }

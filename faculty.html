@@ -16,13 +16,25 @@
         <!-- Sidebar -->
         <nav class="sidebar">
             <div class="brand">
-                <h4><i class="bi bi-calendar3"></i> TTMS</h4>
+                <h4><i class="bi bi-calendar3"></i> CleriTime</h4>
             </div>
             <ul class="nav flex-column">
                 <li class="nav-item">
                     <a class="nav-link active" href="#" data-section="timetable">
                         <i class="bi bi-table"></i>
                         <span>My Timetable</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-section="lectureTracking">
+                        <i class="bi bi-clipboard-check"></i>
+                        <span>Lecture Tracking</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-section="myProgress">
+                        <i class="bi bi-graph-up"></i>
+                        <span>My Progress</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -115,6 +127,115 @@
                 </div>
             </section>
 
+            <!-- Lecture Tracking Section -->
+            <section id="lectureTrackingSection" class="content-section" style="display: none;">
+                <!-- Date Selector -->
+                <div class="content-card mb-4">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <h5 class="mb-0"><i class="bi bi-calendar-check"></i> Today's Schedule</h5>
+                                <p class="text-muted mb-0" id="trackingDateDisplay">Loading...</p>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <div class="d-flex align-items-center justify-content-end gap-2">
+                                    <button class="btn btn-outline-secondary btn-sm" id="prevDayBtn">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                                    <input type="date" class="form-control" id="trackingDate" style="width: 180px;">
+                                    <button class="btn btn-outline-secondary btn-sm" id="nextDayBtn">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                    <button class="btn btn-primary btn-sm" id="todayBtn">Today</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Today's Lectures -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h5><i class="bi bi-list-check"></i> Scheduled Lectures</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="todayLecturesContainer">
+                            <div class="loading-spinner show" id="lecturesLoading">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Loading lectures...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lecture History -->
+                <div class="content-card mt-4">
+                    <div class="card-header">
+                        <h5><i class="bi bi-clock-history"></i> Recent Lecture History</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="lectureHistoryContainer">
+                            <p class="text-muted">Loading history...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- My Progress Section -->
+            <section id="myProgressSection" class="content-section" style="display: none;">
+                <div class="content-card mb-4">
+                    <div class="card-header">
+                        <h5><i class="bi bi-bar-chart-line"></i> My Teaching Statistics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-3">
+                                <div class="stat-card text-center">
+                                    <div class="stat-icon classes"><i class="bi bi-check-circle"></i></div>
+                                    <h3 id="totalConducted">0</h3>
+                                    <p>Lectures Conducted</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card text-center">
+                                    <div class="stat-icon subjects"><i class="bi bi-arrow-repeat"></i></div>
+                                    <h3 id="totalSubstituted">0</h3>
+                                    <p>Substitutions Taken</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card text-center">
+                                    <div class="stat-icon rooms"><i class="bi bi-x-circle"></i></div>
+                                    <h3 id="totalAbsent">0</h3>
+                                    <p>Lectures Missed</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card text-center">
+                                    <div class="stat-icon teachers"><i class="bi bi-percent"></i></div>
+                                    <h3 id="attendanceRate">0%</h3>
+                                    <p>Attendance Rate</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subject Progress -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h5><i class="bi bi-journal-check"></i> Subject-wise Progress</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="subjectProgressContainer">
+                            <p class="text-muted">Loading progress...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Notices Section -->
             <section id="noticesSection" class="content-section" style="display: none;">
                 <div class="form-section">
@@ -166,6 +287,29 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Footer -->
+            <footer class="app-footer">
+                <div class="footer-container">
+                    <p class="footer-copyright">
+                        &copy; 2026 CleriTime. All rights reserved.
+                    </p>
+                    <p class="footer-dev-team">
+                        Developed with <i class="bi bi-heart-fill text-danger"></i> by <a href="developers.html" class="dev-names" style="text-decoration:none;">Our Development Team</a>
+                    </p>
+                    <div class="footer-badges">
+                        <span class="footer-badge">
+                            <i class="bi bi-fire"></i> Powered by Firebase
+                        </span>
+                        <span class="footer-badge">
+                            <i class="bi bi-cpu"></i> AI-Powered by Google Gemini
+                        </span>
+                        <span class="footer-badge">
+                            <i class="bi bi-shield-check"></i> Secure & Reliable
+                        </span>
+                    </div>
+                </div>
+            </footer>
         </main>
 
     <!-- Toast Container -->
@@ -187,6 +331,54 @@
             </div>
         </div>
     </div>
+
+    <!-- Substitution Modal -->
+    <div class="modal fade" id="substitutionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="bi bi-person-dash"></i> Mark Absence / Request Substitution</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> You are about to mark this lecture as absent.
+                        Optionally, you can request a substitute teacher.
+                    </div>
+                    <input type="hidden" id="subClassId">
+                    <input type="hidden" id="subSlotId">
+                    <input type="hidden" id="subSubjectId">
+                    <input type="hidden" id="subDate">
+
+                    <div class="mb-3">
+                        <label class="form-label">Lecture Details</label>
+                        <div class="p-3 bg-light rounded" id="subLectureDetails">
+                            <!-- Will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Reason for Absence (Optional)</label>
+                        <textarea class="form-control" id="subReason" rows="2" placeholder="Enter reason..."></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Substitute Teacher (Optional)</label>
+                        <select class="form-select" id="subTeacher">
+                            <option value="">-- No Substitute --</option>
+                        </select>
+                        <small class="text-muted">If selected, the substitute teacher will get credit for this lecture.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmAbsentBtn">
+                        <i class="bi bi-x-circle"></i> Mark as Absent
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     </div>
 
     <!-- Firebase SDK -->
@@ -200,6 +392,7 @@
     <!-- App Scripts -->
     <script src="js/firebase-config.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/lecture-tracking.js"></script>
     <script src="js/faculty.js"></script>
 </body>
 </html>

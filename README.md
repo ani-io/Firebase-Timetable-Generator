@@ -1,93 +1,434 @@
-# TimeTable Generator
+<div align="center">
 
+# 🗓️ CleriTime
+### Academic Timetable Management System
 
+*Automated, conflict-free university scheduling powered by AI*
 
-## Getting started
+[![Firebase](https://img.shields.io/badge/Firebase-Realtime_DB-FF6F00?style=for-the-badge&logo=firebase&logoColor=white)](https://firebase.google.com)
+[![Gemini AI](https://img.shields.io/badge/Gemini-2.5_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
+[![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3.2-7952B3?style=for-the-badge&logo=bootstrap&logoColor=white)](https://getbootstrap.com)
+[![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+---
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+> **CleriTime** solves the NP-Complete problem of university timetable scheduling using a constraint-satisfaction backtracking algorithm with AI-powered suggestions — all in the browser, with zero backend servers.
 
-## Add your files
+---
 
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+</div>
+
+## 📋 Table of Contents
+
+- [✨ Features](#-features)
+- [🏗️ Architecture](#️-architecture)
+- [🛠️ Tech Stack](#️-tech-stack)
+- [⚙️ Installation & Setup](#️-installation--setup)
+- [🚀 Running the App](#-running-the-app)
+- [👤 User Roles & Workflows](#-user-roles--workflows)
+- [🧠 How the Algorithm Works](#-how-the-algorithm-works)
+- [🗄️ Database Schema](#️-database-schema)
+- [🔒 Security Rules](#-security-rules)
+- [📦 Deployment](#-deployment)
+
+---
+
+## ✨ Features
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🔑 Admin
+- 📊 Live dashboard stats
+- 🎓 Batch & class management
+- 🏫 Room & lab configuration
+- 👨‍🏫 Teacher unavailability setup
+- 📚 Subject configuration (theory & practical)
+- ⏱️ Time slot definition
+- 🤖 AI-powered scheduling suggestions
+- 📋 Conflict analysis after generation
+- 📈 Lecture progress reports
+- 📢 Notice board management
+
+</td>
+<td width="33%" valign="top">
+
+### 👩‍🏫 Faculty
+- 📅 Personal weekly schedule view
+- ✅ Daily lecture marking (conducted / absent / substituted)
+- 🔄 Substitute teacher assignment
+- 📊 Subject completion tracking
+- 📢 Create & view notices
+
+</td>
+<td width="33%" valign="top">
+
+### 🎒 Student
+- 📆 Full weekly timetable view
+- 🧪 Lab batch filter (practical sessions)
+- 📢 Notice board with priority alerts
+- 👁️ Teacher & room info per slot
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🏗️ Architecture
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/students-project/timetable-generator.git
-git branch -M main
-git push -uf origin main
+┌──────────────────────────────────────────────────────┐
+│                   BROWSER (Static Files)              │
+│                                                       │
+│  index.html ──▶ admin.html / faculty.html / student  │
+│                                                       │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐ │
+│  │  Scheduling │  │  Lecture     │  │  Gemini AI  │ │
+│  │  Algorithm  │  │  Tracking    │  │  Integration│ │
+│  │  (CSP/BT)   │  │  Module      │  │  Module     │ │
+│  └─────────────┘  └──────────────┘  └─────────────┘ │
+└──────────────────────────────────────────────────────┘
+              │                          │
+              ▼                          ▼
+   ┌────────────────────┐    ┌──────────────────────┐
+   │  Firebase Realtime │    │  Google Gemini API   │
+   │  Database + Auth   │    │  (gemini-2.5-flash)  │
+   └────────────────────┘    └──────────────────────┘
 ```
 
-## Integrate with your tools
+**No build system. No server. No npm.** All scripts load via `<script>` tags in order — Firebase SDK → `firebase-config.js` → `config.js` → `auth.js` → dashboard JS.
 
-* [Set up project integrations](https://gitlab.com/students-project/timetable-generator/-/settings/integrations)
+---
 
-## Collaborate with your team
+## 🛠️ Tech Stack
 
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **UI** | HTML5 + Bootstrap 5.3.2 | Responsive interface |
+| **Logic** | Vanilla JavaScript (ES6+) | All application logic |
+| **Auth** | Firebase Authentication | Email/password login + role routing |
+| **Database** | Firebase Realtime Database | NoSQL real-time data sync |
+| **AI** | Google Gemini 2.5-flash | Scheduling suggestions & conflict analysis |
+| **Icons** | Bootstrap Icons 1.11.1 | UI icons |
+| **Fonts** | Inter (Google Fonts) | Typography |
 
-## Test and Deploy
+---
 
-Use the built-in continuous integration in GitLab.
+## ⚙️ Installation & Setup
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### Prerequisites
 
-***
+Before you start, you need accounts for:
 
-# Editing this README
+- ✅ [Firebase](https://console.firebase.google.com) — free Spark plan works
+- ✅ [Google AI Studio](https://aistudio.google.com/apikey) — for Gemini API key
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+---
 
-## Suggestions for a good README
+### Step 1 — Clone the Repository
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```bash
+git clone https://github.com/your-username/timetable-generator.git
+cd timetable-generator
+```
 
-## Name
-Choose a self-explaining name for your project.
+---
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### Step 2 — Create a Firebase Project
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+1. Go to [Firebase Console](https://console.firebase.google.com) → **Add project**
+2. Enable **Authentication** → Sign-in method → **Email/Password**
+3. Enable **Realtime Database** → Start in **test mode** (you'll add rules later)
+4. Copy your Firebase config from **Project Settings → Your apps**
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+---
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+### Step 3 — Configure Firebase (`js/firebase-config.js`)
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+Open `js/firebase-config.js` and replace the config object:
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+```javascript
+const firebaseConfig = {
+  apiKey: "YOUR_FIREBASE_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+> ⚠️ This file is committed to the repo. Do **not** put secret service account keys here — only client-side Firebase config is safe.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+---
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+### Step 4 — Create `js/config.js` *(gitignored — must be created manually)*
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+This file is in `.gitignore` and **does not exist** after cloning. You must create it:
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+```javascript
+// js/config.js
+const APP_CONFIG = {
+    adminAccessCode: 'YOUR_ADMIN_SECRET_CODE',   // Required when signing up as Admin
+    gemini: {
+        apiKey: 'YOUR_GEMINI_API_KEY',           // From aistudio.google.com/apikey
+        model: 'gemini-2.5-flash'
+    }
+};
 
-## License
-For open source projects, say how it is licensed.
+Object.freeze(APP_CONFIG);
+Object.freeze(APP_CONFIG.gemini);
+```
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+> 💡 `adminAccessCode` is the secret code an admin must enter during sign-up. Choose anything you want — e.g., `COLLEGE2025`.
+
+---
+
+### Step 5 — Deploy Firebase Security Rules
+
+Install the Firebase CLI (one-time):
+
+```bash
+npm install -g firebase-tools
+firebase login
+firebase init database     # select your project, accept defaults
+```
+
+Deploy the included rules:
+
+```bash
+firebase deploy --only database
+```
+
+> The `database.rules.json` file in the root is pre-configured: admins can write all data; faculty can write lecture records and notices; students are read-only.
+
+---
+
+## 🚀 Running the App
+
+No build step needed — just serve the static files:
+
+```bash
+# Option 1 — Python (built-in)
+python3 -m http.server 8080
+
+# Option 2 — Node.js
+npx serve .
+
+# Option 3 — VS Code
+# Install the "Live Server" extension and click "Go Live"
+```
+
+Open **`http://localhost:8080`** in your browser.
+
+---
+
+## 👤 User Roles & Workflows
+
+### 🔑 First-Time Admin Setup
+
+```
+Sign Up → enter Admin Access Code → role = admin → admin.html
+```
+
+Follow this **exact order** when entering data for the first time:
+
+```
+① Batches      →   ② Rooms        →   ③ Time Slots
+        ↓
+④ Teachers     →   ⑤ Classes      →   ⑥ Subjects
+        ↓
+⑦ Generate Timetable   →   ⑧ (Optional) Get AI Suggestions
+```
+
+> ⚠️ **Order matters.** Classes require a Batch. Subjects require a Class and a Teacher. Timetable generation requires all six to be set up first.
+
+---
+
+#### Batch Setup
+| Field | Example | Notes |
+|-------|---------|-------|
+| Academic Year | `Second Year` | FY / SY / TY / BE |
+| Branch | `Computer Engineering` | |
+| Semester | `III` | |
+| Auto-generated Name | `SY-CO-A` | Used as the class ID prefix |
+
+#### Subject Types
+| Type | Lab Required | Consecutive Slots | Batch-Based |
+|------|-------------|-------------------|-------------|
+| **Theory** | No | No | No |
+| **Practical** | Yes (1 fixed lab) | Yes | No |
+| **Batch Practical** | Yes (per batch) | Yes | ✅ Yes |
+
+For **Batch Practicals**, configure `batchTeachers` and `batchLabs` separately for each lab batch (B1, B2, B3...). All batches are scheduled simultaneously in the same time slot — each in its own lab.
+
+---
+
+### 🤖 Generating a Timetable
+
+1. Go to **Timetable Generator** section
+2. Select a class (or leave blank to generate all classes at once)
+3. Click **Generate Timetable**
+4. The solver runs up to **5 attempts** with random reordering — typically solves in attempt 1 or 2
+5. Optionally click **Get AI Suggestions** before or **Analyze Conflicts** after generation
+
+> 💡 If the timetable shows as `partial`, it means some subjects couldn't fit due to tight constraints — check teacher availability and number of weekly lectures vs. available periods.
+
+---
+
+### 👩‍🏫 Faculty Daily Workflow
+
+```
+Login → View Schedule → Select Today's Date
+    → For each lecture:
+        ✅ Conducted  |  ❌ Absent  |  🔄 Substituted (assign substitute)
+    → Track subject completion %
+```
+
+---
+
+### 🎒 Student Workflow
+
+```
+Login → View Weekly Timetable
+    → Toggle "Show My Batch" to filter batch practicals
+    → Check Notice Board for announcements
+```
+
+---
+
+## 🧠 How the Algorithm Works
+
+CleriTime uses a **Constraint Satisfaction Problem (CSP)** solver — a backtracking search with random restarts.
+
+### The 3 Subject Categories (processed in order)
+
+```
+① Batch Practicals   →  grouped so all batches go to their labs simultaneously
+② Regular Practicals →  require consecutive slots in a fixed lab
+③ Theory Subjects    →  single-period, spread across the week
+```
+
+### Hard Constraints Enforced
+
+| Constraint | Rule |
+|-----------|------|
+| No teacher conflict | A teacher can only be in one place per slot |
+| No room conflict | A room can only hold one class per slot |
+| No class double-booking | A class can only have one subject per slot |
+| Teacher unavailability | Respects configured unavailable slots |
+| Practicals need labs | Only lab rooms are used for practicals |
+| Consecutive periods | Practicals occupy back-to-back periods, no breaks between |
+| Max 2 same subject/day | Theory subjects appear at most twice per day |
+| Max 1 practical/day | Each practical subject appears at most once per day |
+
+### Retry Strategy
+
+```
+Attempt 1  →  shuffle pool + shuffle days  →  solve()
+    ↓ fails?
+Attempt 2  →  re-shuffle  →  solve()
+    ↓ fails? (up to 5 attempts)
+    ↓ all fail?
+Save best partial result seen (most slots placed in any attempt)
+```
+
+### Complexity
+
+| Algorithm | Complexity | Optimality |
+|-----------|-----------|------------|
+| **CleriTime (Backtracking CSP)** | O(n × t) average | ~75-90% |
+| Brute Force | O(d^n) | 100% |
+| Genetic Algorithm | O(g × p × n) | ~90% |
+
+---
+
+## 🗄️ Database Schema
+
+```
+Firebase Realtime Database
+│
+├── users/{uid}               role, name, email, teacherId (faculty), classId (student)
+├── batches/{id}              academicYear, branch, semester, name
+├── classes/{id}              name, batchId, dept, labBatches[]
+├── rooms/{id}                name, type (classroom|lab), capacity
+├── teachers/{id}             name, dept, unavailableSlots[]
+├── subjects/{id}             name, code, classId, teacherId, type, lecturesPerWeek
+│                             [practical]: labRoomId, practicalDuration, isBatchBased
+│                             [batch]:     batchTeachers{}, batchLabs{}
+├── slots/{id}                day, period, type (period|break), startTime, endTime
+│                             Slot ID format: Mon-P1, Tue-P3, Fri-P8
+│
+├── timetables/{classId}/{slotId}
+│       subjectId, subjectName, teacherId, teacherName, roomId, roomName
+│       [batch-practical]: batchSchedule{ batch1: {...}, batch2: {...} }
+│       status: draft | partial | failed
+│
+├── lectureRecords/{classId}/{YYYY-MM-DD}/{slotId}
+│       status (conducted|absent|substituted), scheduledTeacherId,
+│       actualTeacherId, subjectId, substituteReason
+│
+└── notices/{id}              title, content, priority, audience, authorId, createdAt
+```
+
+---
+
+## 🔒 Security Rules
+
+Defined in `database.rules.json` and deployed via Firebase CLI:
+
+| Collection | Read | Write |
+|-----------|------|-------|
+| `users` | Owner or Admin | Owner only |
+| `teachers`, `classes`, `rooms`, `subjects`, `slots`, `timetables` | Any authenticated | Admin only |
+| `lectureRecords` | Any authenticated | Admin + Faculty |
+| `notices` | Any authenticated | Admin + Faculty |
+
+---
+
+## 📦 Deployment
+
+### Firebase Hosting (Recommended)
+
+```bash
+firebase init hosting
+# Public directory: .   (root)
+# Single-page app: No
+# Overwrite index.html: No
+
+firebase deploy
+```
+
+Your app will be live at `https://YOUR_PROJECT.web.app`
+
+### Other Static Hosts
+
+Since CleriTime is 100% static, it works on any host:
+
+| Platform | Deploy Command |
+|---------|---------------|
+| **Vercel** | `npx vercel .` |
+| **Netlify** | Drag-and-drop the folder in the Netlify dashboard |
+| **GitHub Pages** | Push to `gh-pages` branch |
+
+> 🔑 After deployment, update your Firebase project's **Authorized domains** (Authentication → Settings) to include your new domain.
+
+---
+
+<div align="center">
+
+## 🏫 Built for Universities, by Developers Who Care
+
+**CleriTime** eliminates hours of manual timetable planning, prevents scheduling conflicts, and gives every stakeholder — admin, faculty, and student — a clear, real-time view of the academic schedule.
+
+---
+
+Made with ❤️ using **Firebase** · **Gemini AI** · **Bootstrap**
+
+*© 2026 CleriTime. All rights reserved.*
+
+</div>

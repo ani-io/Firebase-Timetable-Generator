@@ -1,587 +1,502 @@
-// Timetable Generation Algorithm - Improved Version
-// Features:
-// - Skips break slots
-// - Max 2 of same subject per day, avoids consecutive periods
-// - Handles practicals with consecutive periods in labs
+// Timetable Generation Algorithm - UNBIASED SYMMETRIC SOLVER
+// Features: Dynamic Shuffling to prevent class-hogging + NULL Resource tracking.
 
-// Generate timetable for all or selected class
+function escapeHtmlDisplay(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
 async function generateTimetable() {
     const selectedClass = document.getElementById('timetableClass').value;
     const container = document.getElementById('timetableContainer');
     const logContainer = document.getElementById('generationLog');
     const logContent = document.getElementById('logContent');
 
-    // Show loading
-    container.innerHTML = `
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Generating...</span>
-            </div>
-            <p class="mt-2 text-muted">Generating timetable... Please wait.</p>
-        </div>
-    `;
+    container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div><p>AI is solving with Random-Access optimization...<br><small id="progressCount">Breaking bias...</small></p></div>`;
 
     const logs = [];
-    const log = (msg) => {
-        logs.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
-        console.log(msg);
-    };
+    const log = (msg) => logs.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
 
     try {
-        // Fetch all required data
-        log('Fetching data from database...');
-        const [classesSnap, subjectsSnap, teachersSnap, roomsSnap, slotsSnap] = await Promise.all([
-            database.ref('classes').once('value'),
-            database.ref('subjects').once('value'),
-            database.ref('teachers').once('value'),
-            database.ref('rooms').once('value'),
-            database.ref('slots').once('value')
+        const [classesS, subjectsS, teachersS, roomsS, slotsS, allTimetablesS] = await Promise.all([
+            database.ref('classes').once('value'), database.ref('subjects').once('value'),
+            database.ref('teachers').once('value'), database.ref('rooms').once('value'),
+            database.ref('slots').once('value'), database.ref('timetables').once('value')
         ]);
 
-        const classes = classesSnap.val() || {};
-        const subjects = subjectsSnap.val() || {};
-        const teachers = teachersSnap.val() || {};
-        const rooms = roomsSnap.val() || {};
-        const slots = slotsSnap.val() || {};
+        const classes = classesS.val() || {};
+        const subjects = subjectsS.val() || {};
+        const teachers = teachersS.val() || {};
+        const rooms = roomsS.val() || {};
+        const slots = slotsS.val() || {};
+        const allTimetables = allTimetablesS.val() || {};
 
-        // Validate data
-        if (Object.keys(classes).length === 0) {
-            throw new Error('No classes found. Please add classes first.');
-        }
-        if (Object.keys(subjects).length === 0) {
-            throw new Error('No subjects found. Please add subjects first.');
-        }
-        if (Object.keys(rooms).length === 0) {
-            throw new Error('No rooms found. Please add rooms first.');
-        }
-        if (Object.keys(slots).length === 0) {
-            throw new Error('No time slots found. Please generate time slots first.');
-        }
+        const tMap = {};
+        const rMap = {};
+        const cMap = {};
+        
+        // Initialize Maps (Including 'NULL' as a valid ID if it's used in the data)
+        const initMap = (id) => { if (!tMap[id]) tMap[id] = {}; };
+        Object.keys(teachers).forEach(initMap);
+        Object.keys(rooms).forEach(id => rMap[id] = {});
+        Object.keys(classes).forEach(id => cMap[id] = {});
 
-        // Separate classrooms and labs
-        const classrooms = Object.entries(rooms).filter(([_, r]) => r.type !== 'lab');
-        const labs = Object.entries(rooms).filter(([_, r]) => r.type === 'lab');
-
-        log(`Found: ${Object.keys(classes).length} classes, ${Object.keys(subjects).length} subjects, ${classrooms.length} classrooms, ${labs.length} labs, ${Object.keys(slots).length} slots`);
-
-        // Filter classes if specific one selected
-        const targetClasses = selectedClass
-            ? { [selectedClass]: classes[selectedClass] }
-            : classes;
-
-        // Initialize tracking maps
-        const teacherSlotMap = {}; // teacherSlotMap[teacherId][slotId] = true
-        const roomSlotMap = {};    // roomSlotMap[roomId][slotId] = true
-        const classSlotMap = {};   // classSlotMap[classId][slotId] = true
-
-        // Track subject assignments per day per class: classSubjectDayMap[classId][day][subjectId] = count
-        const classSubjectDayMap = {};
-
-        // Initialize maps
-        Object.keys(teachers).forEach(tid => teacherSlotMap[tid] = {});
-        Object.keys(rooms).forEach(rid => roomSlotMap[rid] = {});
-        Object.keys(classes).forEach(cid => {
-            classSlotMap[cid] = {};
-            classSubjectDayMap[cid] = {
-                Monday: {}, Tuesday: {}, Wednesday: {}, Thursday: {}, Friday: {}
-            };
+        // Pre-load global conflicts
+        Object.entries(allTimetables).forEach(([cid, classTimetable]) => {
+            if (cid !== selectedClass) {
+                Object.entries(classTimetable).forEach(([slotId, entry]) => {
+                    const mark = (id, map) => { if (id) { if (!map[id]) map[id] = {}; map[id][slotId] = true; } };
+                    if (entry.subjectType !== 'batch-practical' && !entry.batchSchedule) {
+                        mark(entry.teacherId, tMap);
+                        mark(entry.roomId, rMap);
+                    }
+                    if (entry.batchSchedule) {
+                        Object.values(entry.batchSchedule).forEach(b => {
+                            mark(b.teacherId, tMap);
+                            mark(b.roomId, rMap);
+                        });
+                    }
+                });
+            }
         });
 
-        // Timetable entries to save
+        const targetClasses = selectedClass ? { [selectedClass]: classes[selectedClass] } : classes;
         const timetableEntries = {};
-        const unassigned = [];
 
-        // Filter out break slots and sort for consistent ordering
-        const classSlots = Object.entries(slots)
-            .filter(([_, slot]) => slot.type !== 'break')
-            .sort((a, b) => {
-                const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-                const dayDiff = days.indexOf(a[1].day) - days.indexOf(b[1].day);
-                if (dayDiff !== 0) return dayDiff;
-                return a[1].period - b[1].period;
-            });
+        for (const [classId, classData] of Object.entries(targetClasses)) {
+            log(`Solving ${classData.name} with Unbiased Priority...`);
+            timetableEntries[classId] = {};
+            const pool = [];
+            const batchItemsByBatch = {};
 
-        log(`Using ${classSlots.length} class slots (excluding breaks)`);
-        log(`Processing ${Object.keys(targetClasses).length} class(es)...`);
-
-        // Helper: Check if same subject was assigned in previous period
-        function wasAssignedPreviousPeriod(classId, day, period, subjectId) {
-            const prevPeriod = period - 1;
-            if (prevPeriod < 1) return false;
-            const prevSlotId = `${day.substring(0, 3)}-P${prevPeriod}`;
-            const entry = timetableEntries[classId]?.[prevSlotId];
-            return entry?.subjectId === subjectId;
-        }
-
-        // Helper: Count same subject on a day
-        function getSubjectCountForDay(classId, day, subjectId) {
-            return classSubjectDayMap[classId]?.[day]?.[subjectId] || 0;
-        }
-
-        // Helper: Find consecutive available slots for practicals
-        function findConsecutiveSlots(classId, teacherId, labRoomId, duration, subjectId) {
-            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-
-            for (const day of days) {
-                // Check max per day constraint
-                if (getSubjectCountForDay(classId, day, subjectId) >= 2) continue;
-
-                // Get slots for this day, sorted by period
-                const daySlots = classSlots
-                    .filter(([_, s]) => s.day === day)
-                    .sort((a, b) => a[1].period - b[1].period);
-
-                // Try to find consecutive slots
-                for (let i = 0; i <= daySlots.length - duration; i++) {
-                    const consecutive = [];
-                    let valid = true;
-
-                    for (let j = 0; j < duration && valid; j++) {
-                        const [slotId, slotData] = daySlots[i + j];
-
-                        // Check consecutive periods (accounting for breaks)
-                        if (j > 0) {
-                            const prevPeriod = daySlots[i + j - 1][1].period;
-                            const currPeriod = slotData.period;
-                            // Allow gap of 1 for breaks (e.g., P3 -> P4 after break is OK)
-                            if (currPeriod - prevPeriod > 2) {
-                                valid = false;
-                                continue;
-                            }
-                        }
-
-                        // Check availability
-                        if (classSlotMap[classId][slotId]) valid = false;
-                        if (teacherSlotMap[teacherId]?.[slotId]) valid = false;
-                        if (labRoomId && roomSlotMap[labRoomId]?.[slotId]) valid = false;
-
-                        if (valid) consecutive.push([slotId, slotData]);
-                    }
-
-                    if (valid && consecutive.length === duration) {
-                        return consecutive;
+            Object.entries(subjects).filter(([_, s]) => s.classId === classId).forEach(([id, s]) => {
+                const count = parseInt(s.lecturesPerWeek) || 0;
+                for (let i = 0; i < count; i++) {
+                    if (s.isBatchBased) {
+                        Object.entries(s.batchTeachers || {}).forEach(([b, ti]) => {
+                            if (!batchItemsByBatch[b]) batchItemsByBatch[b] = [];
+                            batchItemsByBatch[b].push({
+                                id: `${id}_${b}`,
+                                realId: id,
+                                data: s,
+                                batch: b,
+                                teacherId: ti,
+                                labId: s.batchLabs ? s.batchLabs[b] : null,
+                                duration: parseInt(s.practicalDuration) || 2
+                            });
+                        });
+                    } else {
+                        pool.push({ 
+                            id, data: s, 
+                            type: s.type === 'practical' ? 'practical' : 'theory', 
+                            duration: parseInt(s.practicalDuration) || (s.type === 'practical' ? 2 : 1)
+                        });
                     }
                 }
-            }
-            return null;
-        }
+            });
 
-        // For each class
-        for (const [classId, classData] of Object.entries(targetClasses)) {
-            log(`\nProcessing class: ${classData.name} (${classId})`);
-            timetableEntries[classId] = {};
-
-            // Get subjects for this class, separate theory and practical
-            const classSubjects = Object.entries(subjects)
-                .filter(([_, sub]) => sub.classId === classId);
-
-            const theorySubjects = classSubjects.filter(([_, s]) => s.type !== 'practical');
-            const practicalSubjects = classSubjects.filter(([_, s]) => s.type === 'practical');
-
-            if (classSubjects.length === 0) {
-                log(`  No subjects assigned to this class. Skipping.`);
-                continue;
-            }
-
-            log(`  Found ${theorySubjects.length} theory and ${practicalSubjects.length} practical subjects`);
-
-            // First, schedule practicals (they need consecutive slots)
-            for (const [subjectId, subjectData] of practicalSubjects) {
-                const teacherId = subjectData.teacherId;
-                const teacherData = teachers[teacherId];
-                const sessionsNeeded = subjectData.lecturesPerWeek;
-                const duration = subjectData.practicalDuration || 2;
-                const labRoomId = subjectData.labRoomId;
-
-                log(`  Practical: ${subjectData.name} (${sessionsNeeded} sessions × ${duration}h, Teacher: ${teacherData?.name || teacherId})`);
-
-                let sessionsAssigned = 0;
-
-                for (let session = 0; session < sessionsNeeded; session++) {
-                    const consecutiveSlots = findConsecutiveSlots(classId, teacherId, labRoomId, duration, subjectId);
-
-                    if (!consecutiveSlots) {
-                        log(`    Could not find ${duration} consecutive slots for session ${session + 1}`);
-                        continue;
+            let hasMore = true;
+            while (hasMore) {
+                hasMore = false;
+                const groupItems = [];
+                let maxDuration = 0;
+                
+                const usedTeachers = new Set();
+                const usedLabs = new Set();
+                
+                const batches = Object.keys(batchItemsByBatch).sort(() => Math.random() - 0.5);
+                batches.forEach(b => {
+                    if (batchItemsByBatch[b].length > 0) {
+                        let foundIdx = -1;
+                        for (let i = 0; i < batchItemsByBatch[b].length; i++) {
+                            const item = batchItemsByBatch[b][i];
+                            if (usedTeachers.has(item.teacherId)) continue;
+                            if (item.labId && usedLabs.has(item.labId)) continue;
+                            foundIdx = i;
+                            break;
+                        }
+                        
+                        if (foundIdx !== -1) {
+                            const item = batchItemsByBatch[b].splice(foundIdx, 1)[0];
+                            groupItems.push(item);
+                            usedTeachers.add(item.teacherId);
+                            if (item.labId) usedLabs.add(item.labId);
+                            if (item.duration > maxDuration) maxDuration = item.duration;
+                        }
                     }
+                });
+                
+                batches.forEach(b => {
+                    if (batchItemsByBatch[b].length > 0) hasMore = true;
+                });
+                
+                if (groupItems.length > 0) {
+                    pool.push({
+                        type: 'batch-group',
+                        items: groupItems,
+                        duration: maxDuration || 2
+                    });
+                }
+            }
 
-                    // Find available lab room
-                    let assignedLab = null;
-                    if (labRoomId && labs.find(([id]) => id === labRoomId)) {
-                        // Preferred lab
-                        let labAvailable = true;
-                        for (const [slotId] of consecutiveSlots) {
-                            if (roomSlotMap[labRoomId]?.[slotId]) {
-                                labAvailable = false;
-                                break;
+            let totalPeriodsNeeded = 0;
+            pool.forEach(p => totalPeriodsNeeded += p.duration);
+            const maxPeriodsPerDay = Math.min(9, Math.ceil(totalPeriodsNeeded / 5) + 1);
+
+            // Randomize pool to prevent subject-bias
+            pool.sort(() => Math.random() - 0.5);
+
+            const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+            // SHUFFLE DAYS for each class to prevent "Monday Hogging"
+            const shuffledDays = [...dayNames].sort(() => Math.random() - 0.5);
+            
+            const dayMeta = shuffledDays.map(d => ({ 
+                name: d, prefix: d.substring(0, 3), 
+                slots: [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(p => {
+                    const sid = `${d.substring(0, 3)}-P${p}`;
+                    return slots[sid] && slots[sid].type !== 'break';
+                })
+            }));
+
+            let it = 0;
+            const MAX_IT = 50000;
+            let bestPartial = null;
+            let bestPartialCount = 0;
+
+            async function solve(idx, dIdx, sIdx) {
+                it++;
+                if (it % 1500 === 0) {
+                    const el = document.getElementById('progressCount');
+                    if (el) el.textContent = `Retrying for ${classData.name}... (Try ${it})`;
+                    await new Promise(r => setTimeout(r, 0));
+                }
+
+                if (idx >= pool.length) return true;
+                if (dIdx >= 5 || it > MAX_IT) return false;
+
+                // Snapshot the best partial result seen so far
+                const placed = Object.keys(timetableEntries[classId]).length;
+                if (placed > bestPartialCount) {
+                    bestPartialCount = placed;
+                    bestPartial = JSON.parse(JSON.stringify(timetableEntries[classId]));
+                }
+
+                const day = dayMeta[dIdx];
+                if (sIdx >= day.slots.length) return await solve(idx, dIdx + 1, 0);
+
+                const period = day.slots[sIdx];
+                for (let i = idx; i < pool.length; i++) {
+                    const sub = pool[i];
+                    const roomId = findRoom(sub, day.name, period);
+                    
+                    if (roomId && check(sub, day.name, period)) {
+                        [pool[idx], pool[i]] = [pool[i], pool[idx]];
+                        assign(sub, day.name, period, roomId);
+                        if (await solve(idx + 1, dIdx, sIdx + sub.duration)) return true;
+                        unassign(sub, day.name, period, roomId);
+                        [pool[idx], pool[i]] = [pool[i], pool[idx]];
+                    }
+                }
+                // Allowed to start a class later in the day if morning is fully blocked
+                if (sIdx === 0 && day.slots.length > 0) {
+                    if (await solve(idx, dIdx, 1)) return true;
+                }
+                
+                return await solve(idx, dIdx + 1, 0);
+            }
+
+            function findRoom(sub, d, p) {
+                const dp = d.substring(0, 3);
+                
+                if (sub.type === 'batch-group') {
+                    const groupRooms = {};
+                    const usedTheoryRooms = new Set();
+                    
+                    for (const item of sub.items) {
+                        if (item.labId) {
+                            for (let x = 0; x < item.duration; x++) {
+                                if (rMap[item.labId]?.[`${dp}-P${p + x}`]) return null;
                             }
-                        }
-                        if (labAvailable) {
-                            assignedLab = { id: labRoomId, data: rooms[labRoomId] };
-                        }
-                    }
-
-                    // If preferred lab not available, find any available lab
-                    if (!assignedLab) {
-                        for (const [labId, labData] of labs) {
-                            let labAvailable = true;
-                            for (const [slotId] of consecutiveSlots) {
-                                if (roomSlotMap[labId]?.[slotId]) {
-                                    labAvailable = false;
+                            groupRooms[item.batch] = item.labId;
+                        } else {
+                            const crs = Object.entries(rooms).map(([id]) => id);
+                            let found = null;
+                            for (const rid of crs) {
+                                if (usedTheoryRooms.has(rid)) continue;
+                                let ok = true;
+                                for (let x = 0; x < item.duration; x++) {
+                                    if (rMap[rid]?.[`${dp}-P${p + x}`]) { ok = false; break; }
+                                }
+                                if (ok) {
+                                    found = rid;
                                     break;
                                 }
                             }
-                            if (labAvailable) {
-                                assignedLab = { id: labId, data: labData };
-                                break;
-                            }
+                            if (!found) return null;
+                            groupRooms[item.batch] = found;
+                            usedTheoryRooms.add(found);
                         }
                     }
-
-                    if (!assignedLab) {
-                        log(`    No lab available for consecutive slots`);
-                        continue;
-                    }
-
-                    // Assign all consecutive slots
-                    const day = consecutiveSlots[0][1].day;
-                    for (const [slotId, slotData] of consecutiveSlots) {
-                        classSlotMap[classId][slotId] = true;
-                        if (!teacherSlotMap[teacherId]) teacherSlotMap[teacherId] = {};
-                        teacherSlotMap[teacherId][slotId] = true;
-                        roomSlotMap[assignedLab.id][slotId] = true;
-
-                        timetableEntries[classId][slotId] = {
-                            subjectId,
-                            subjectName: subjectData.name,
-                            subjectType: 'practical',
-                            teacherId,
-                            teacherName: teacherData?.name || teacherId,
-                            roomId: assignedLab.id,
-                            roomName: assignedLab.data.name,
-                            practicalSession: session + 1,
-                            duration
-                        };
-                    }
-
-                    // Update subject count for day
-                    if (!classSubjectDayMap[classId][day][subjectId]) {
-                        classSubjectDayMap[classId][day][subjectId] = 0;
-                    }
-                    classSubjectDayMap[classId][day][subjectId]++;
-
-                    sessionsAssigned++;
-                    log(`    Assigned ${duration}-period practical on ${day} in ${assignedLab.data.name}`);
+                    return groupRooms;
                 }
 
-                if (sessionsAssigned < sessionsNeeded) {
-                    const missed = sessionsNeeded - sessionsAssigned;
-                    log(`    WARNING: Could only assign ${sessionsAssigned}/${sessionsNeeded} practical sessions`);
-                    unassigned.push({
-                        classId,
-                        subjectId,
-                        subjectName: subjectData.name,
-                        missed,
-                        type: 'practical'
-                    });
+                if (sub.type === 'practical' && sub.data.labRoomId) {
+                    const rid = sub.data.labRoomId;
+                    for (let x = 0; x < sub.duration; x++) if (rMap[rid]?.[`${dp}-P${p + x}`]) return null;
+                    return rid;
                 }
+                
+                const crs = Object.entries(rooms).filter(([_, r]) => r.type !== 'lab').map(([id]) => id);
+                for (const rid of crs) {
+                    let ok = true;
+                    for (let x = 0; x < sub.duration; x++) if (rMap[rid]?.[`${dp}-P${p + x}`]) { ok = false; break; }
+                    if (ok) return rid;
+                }
+                return null;
             }
 
-            // Then, schedule theory subjects
-            for (const [subjectId, subjectData] of theorySubjects) {
-                const teacherId = subjectData.teacherId;
-                const teacherData = teachers[teacherId];
-                const lecturesNeeded = subjectData.lecturesPerWeek;
-
-                log(`  Theory: ${subjectData.name} (${lecturesNeeded} lectures/week, Teacher: ${teacherData?.name || teacherId})`);
-
-                let lecturesAssigned = 0;
-
-                // Shuffle slots to distribute better across days
-                const shuffledSlots = [...classSlots].sort(() => Math.random() - 0.5);
-
-                // Try to assign required number of lectures
-                for (const [slotId, slotData] of shuffledSlots) {
-                    if (lecturesAssigned >= lecturesNeeded) break;
-
-                    const day = slotData.day;
-                    const period = slotData.period;
-
-                    // Check max 2 per day constraint
-                    if (getSubjectCountForDay(classId, day, subjectId) >= 2) continue;
-
-                    // Check not consecutive constraint (avoid same subject in adjacent periods)
-                    if (wasAssignedPreviousPeriod(classId, day, period, subjectId)) continue;
-
-                    // Also check if next period already has this subject
-                    const nextSlotId = `${day.substring(0, 3)}-P${period + 1}`;
-                    if (timetableEntries[classId]?.[nextSlotId]?.subjectId === subjectId) continue;
-
-                    // Check if class slot is free
-                    if (classSlotMap[classId][slotId]) continue;
-
-                    // Check if teacher is free
-                    if (teacherSlotMap[teacherId]?.[slotId]) continue;
-
-                    // Find available classroom (not lab)
-                    let assignedRoom = null;
-                    for (const [roomId, roomData] of classrooms) {
-                        if (!roomSlotMap[roomId][slotId]) {
-                            assignedRoom = { id: roomId, data: roomData };
-                            break;
-                        }
+            function check(sub, d, p) {
+                const dp = d.substring(0, 3);
+                
+                const currentDaySlots = Object.keys(timetableEntries[classId] || {}).filter(tid => tid.startsWith(dp)).length;
+                if (currentDaySlots + sub.duration > maxPeriodsPerDay) return false;
+                
+                let count = 0;
+                Object.values(timetableEntries[classId] || {}).forEach(e => {
+                    if (e.dayPrefix === dp && sub.type !== 'batch-group') {
+                        if (e.subjectId === sub.id) count++;
                     }
+                });
+                
+                if (sub.type === 'batch-group') {
+                    for (const item of sub.items) {
+                        let itemCount = 0;
+                        Object.values(timetableEntries[classId] || {}).forEach(e => {
+                            if (e.dayPrefix === dp && e.batchSchedule && e.batchSchedule[item.batch] && e.batchSchedule[item.batch].subjectId === item.realId) {
+                                itemCount++;
+                            }
+                        });
+                        if (itemCount > 0) return false;
+                    }
+                } else if (sub.type === 'practical') {
+                    if (count > 0) return false; 
+                } else {
+                    if (count >= 2) return false;
+                }
 
-                    if (!assignedRoom) {
-                        // Try labs if no classrooms available
-                        for (const [roomId, roomData] of labs) {
-                            if (!roomSlotMap[roomId][slotId]) {
-                                assignedRoom = { id: roomId, data: roomData };
-                                break;
+                for (let x = 0; x < sub.duration; x++) {
+                    const tid = `${dp}-P${p + x}`;
+                    const cStatus = cMap[classId][tid];
+                    if (cStatus === 'whole') return false;
+                    
+                    if (sub.type === 'batch-group') {
+                        if (Array.isArray(cStatus)) {
+                            for (const item of sub.items) {
+                                if (x >= item.duration) continue;
+                                if (cStatus.includes(item.batch)) return false;
                             }
                         }
+                    } else {
+                        if (cStatus) return false;
                     }
 
-                    if (!assignedRoom) {
-                        continue;
-                    }
-
-                    // Assign the lecture
-                    classSlotMap[classId][slotId] = true;
-                    if (!teacherSlotMap[teacherId]) teacherSlotMap[teacherId] = {};
-                    teacherSlotMap[teacherId][slotId] = true;
-                    roomSlotMap[assignedRoom.id][slotId] = true;
-
-                    // Update subject count for day
-                    if (!classSubjectDayMap[classId][day][subjectId]) {
-                        classSubjectDayMap[classId][day][subjectId] = 0;
-                    }
-                    classSubjectDayMap[classId][day][subjectId]++;
-
-                    timetableEntries[classId][slotId] = {
-                        subjectId,
-                        subjectName: subjectData.name,
-                        subjectType: 'theory',
-                        teacherId,
-                        teacherName: teacherData?.name || teacherId,
-                        roomId: assignedRoom.id,
-                        roomName: assignedRoom.data.name
+                    const verify = (id) => {
+                        if (!id) return true;
+                        if (tMap[id] && tMap[id][tid]) return false;
+                        if (teachers[id]?.unavailableSlots?.includes(tid)) return false;
+                        return true;
                     };
-
-                    lecturesAssigned++;
-                    log(`    Assigned to ${day} P${period} in ${assignedRoom.data.name}`);
+                    
+                    if (sub.type === 'batch-group') {
+                        for (const item of sub.items) {
+                            if (x >= item.duration) continue;
+                            if (!verify(item.teacherId)) return false;
+                        }
+                    } else {
+                        if (!verify(sub.data.teacherId)) return false;
+                    }
                 }
+                return true;
+            }
 
-                if (lecturesAssigned < lecturesNeeded) {
-                    const missed = lecturesNeeded - lecturesAssigned;
-                    log(`    WARNING: Could only assign ${lecturesAssigned}/${lecturesNeeded} lectures`);
-                    unassigned.push({
-                        classId,
-                        subjectId,
-                        subjectName: subjectData.name,
-                        missed,
-                        type: 'theory'
-                    });
+            function assign(sub, d, p, rid) {
+                const dp = d.substring(0, 3);
+                for (let x = 0; x < sub.duration; x++) {
+                    const tid = `${dp}-P${p + x}`;
+                    const mark = (id, map) => { if (id) { if (!map[id]) map[id] = {}; map[id][tid] = true; } };
+                    
+                    if (sub.type === 'batch-group') {
+                        if (!Array.isArray(cMap[classId][tid])) cMap[classId][tid] = [];
+                        if (!timetableEntries[classId][tid]) {
+                            timetableEntries[classId][tid] = { subjectType: 'batch-practical', batchSchedule: {}, dayPrefix: dp };
+                        }
+                        
+                        for (const item of sub.items) {
+                            if (x >= item.duration) continue;
+                            
+                            cMap[classId][tid].push(item.batch);
+                            const itemRid = rid[item.batch];
+                            mark(item.teacherId, tMap);
+                            mark(itemRid, rMap);
+                            
+                            timetableEntries[classId][tid].batchSchedule[item.batch] = {
+                                subjectId: item.realId,
+                                subjectName: item.data.name || item.realId,
+                                teacherId: item.teacherId,
+                                teacherName: teachers[item.teacherId]?.name || item.teacherId || 'NULL',
+                                roomId: itemRid,
+                                roomName: rooms[itemRid]?.name || itemRid || 'NULL'
+                            };
+                        }
+                    } else {
+                        cMap[classId][tid] = 'whole';
+                        timetableEntries[classId][tid] = {
+                            subjectId: sub.id, subjectName: sub.data.name || sub.id, teacherId: sub.data.teacherId,
+                            teacherName: teachers[sub.data.teacherId]?.name || sub.data.teacherId || 'NULL',
+                            roomId: rid, roomName: rooms[rid]?.name || rid || 'NULL', dayPrefix: dp, subjectType: sub.type
+                        };
+                        mark(sub.data.teacherId, tMap);
+                        mark(rid, rMap);
+                    }
                 }
             }
+
+            function unassign(sub, d, p, rid) {
+                const dp = d.substring(0, 3);
+                for (let x = 0; x < sub.duration; x++) {
+                    const tid = `${dp}-P${p + x}`;
+                    const unmark = (id, map) => { if (id && map[id]) delete map[id][tid]; };
+                    
+                    if (sub.type === 'batch-group') {
+                        for (const item of sub.items) {
+                            if (x >= item.duration) continue;
+                            
+                            const itemRid = rid[item.batch];
+                            unmark(item.teacherId, tMap);
+                            unmark(itemRid, rMap);
+                            
+                            if (Array.isArray(cMap[classId][tid])) {
+                                cMap[classId][tid] = cMap[classId][tid].filter(b => b !== item.batch);
+                            }
+                            
+                            if (timetableEntries[classId][tid] && timetableEntries[classId][tid].batchSchedule) {
+                                delete timetableEntries[classId][tid].batchSchedule[item.batch];
+                            }
+                        }
+                        
+                        if (Array.isArray(cMap[classId][tid]) && cMap[classId][tid].length === 0) {
+                            delete cMap[classId][tid];
+                        }
+                        if (timetableEntries[classId][tid] && timetableEntries[classId][tid].batchSchedule && Object.keys(timetableEntries[classId][tid].batchSchedule).length === 0) {
+                            delete timetableEntries[classId][tid];
+                        }
+                    } else {
+                        unmark(sub.data.teacherId, tMap);
+                        unmark(rid, rMap);
+                        delete cMap[classId][tid];
+                        delete timetableEntries[classId][tid];
+                    }
+                }
+            }
+
+            let solved = false;
+            for (let attempt = 1; attempt <= 5 && !solved; attempt++) {
+                it = 0;
+                timetableEntries[classId] = {};
+                cMap[classId] = {};
+                pool.sort(() => Math.random() - 0.5);
+                dayMeta.sort(() => Math.random() - 0.5);
+                if (attempt > 1) log(`Retry attempt ${attempt} for ${classData.name}...`);
+                solved = await solve(0, 0, 0);
+            }
+
+            const finalEntries = solved ? timetableEntries[classId] : (bestPartial || {});
+            const status = solved ? 'draft' : (bestPartialCount > 0 ? 'partial' : 'failed');
+            if (!solved) log(`Warning: Could not fully schedule ${classData.name}. Saved best partial result (${bestPartialCount} slots placed).`);
+            
+            if (!window.previewTimetables) window.previewTimetables = {};
+            window.previewTimetables[classId] = { ...finalEntries, updatedAt: Date.now(), status: 'preview' };
         }
 
-        // Save to database
-        log('\nSaving timetable to database...');
-
-        // Clear existing and save new
-        if (selectedClass) {
-            await database.ref(`timetables/${selectedClass}`).set(timetableEntries[selectedClass] || {});
-        } else {
-            await database.ref('timetables').set(timetableEntries);
+        const targetId = selectedClass || Object.keys(targetClasses)[0];
+        displayTimetable(targetId);
+        if (typeof showTimetableActions === 'function') {
+            showTimetableActions(targetId, window.previewTimetables[targetId]);
         }
-
-        log('Timetable saved successfully!');
-
-        // Show warnings if any
-        if (unassigned.length > 0) {
-            log('\n=== WARNINGS ===');
-            unassigned.forEach(item => {
-                log(`Class ${item.classId}: ${item.subjectName} (${item.type}) - ${item.missed} session(s) could not be scheduled`);
-            });
-        }
-
-        // Display timetable
-        await displayTimetable(selectedClass || Object.keys(targetClasses)[0]);
-
-        // Show log
-        logContainer.style.display = 'block';
-        logContent.textContent = logs.join('\n');
-
-        showToast(
-            unassigned.length > 0
-                ? `Timetable generated with ${unassigned.length} warning(s). Check the log.`
-                : 'Timetable generated successfully!',
-            unassigned.length > 0 ? 'warning' : 'success'
-        );
-
-    } catch (error) {
-        log(`ERROR: ${error.message}`);
-        container.innerHTML = `
-            <div class="alert alert-danger">
-                <i class="bi bi-exclamation-triangle"></i> ${error.message}
-            </div>
-        `;
-        logContainer.style.display = 'block';
-        logContent.textContent = logs.join('\n');
-        showToast('Error generating timetable: ' + error.message, 'danger');
+        showToast('Unified Generation Complete! Previewing...', 'success');
+    } catch (e) {
+        showToast(e.message, 'danger');
     }
 }
 
-// Display timetable in grid format with breaks
-async function displayTimetable(classId) {
+async function displayTimetable(classId, batchFilter = null) {
     const container = document.getElementById('timetableContainer');
     const title = document.getElementById('timetableTitle');
-
-    // Fetch timetable and slots
-    const [timetableSnap, slotsSnap, classesSnap] = await Promise.all([
-        database.ref(`timetables/${classId}`).once('value'),
+    const [sSnap, cSnap] = await Promise.all([
         database.ref('slots').once('value'),
         database.ref(`classes/${classId}`).once('value')
     ]);
-
-    const timetable = timetableSnap.val() || {};
-    const slots = slotsSnap.val() || {};
-    const classData = classesSnap.val();
-
-    if (Object.keys(timetable).length === 0 && Object.keys(slots).length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="bi bi-calendar-x"></i>
-                <h5>No Timetable Found</h5>
-                <p>Generate a timetable first</p>
-            </div>
-        `;
-        return;
+    
+    let timetable = {};
+    if (window.previewTimetables && window.previewTimetables[classId]) {
+        timetable = window.previewTimetables[classId];
+    } else {
+        const tSnap = await database.ref(`timetables/${classId}`).once('value');
+        timetable = tSnap.val() || {};
     }
-
-    title.innerHTML = `
-        <span>Timetable: ${classData?.name || classId}</span>
-        <button class="btn btn-sm btn-outline-secondary ms-3" onclick="loadExistingTimetables()">
-            <i class="bi bi-arrow-left"></i> Back to Overview
-        </button>
-    `;
-
-    // Build grid - include breaks
+    
+    const slots = sSnap.val() || {};
+    const classData = cSnap.val() || { name: classId };
+    const displayName = timetable.draftName || classData.name;
+    title.innerHTML = `<span>Timetable: ${displayName}</span>`;
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-
-    // Get all periods including breaks, sorted
-    const periodOrder = [1, 2, 3, 'B1', 4, 5, 6, 'B2', 7];
-    const allPeriods = [];
-
-    // Build period info from slots
-    const periodInfo = {};
-    Object.values(slots).forEach(slot => {
-        const key = slot.period;
-        if (!periodInfo[key]) {
-            periodInfo[key] = {
-                period: slot.period,
-                start: slot.start,
-                end: slot.end,
-                type: slot.type || 'class',
-                label: slot.label
-            };
+    const pOrder = [1, 2, 3, 4, 'B1', 5, 6, 7, 'B2', 8, 9];
+    const pInfo = {};
+    Object.values(slots).forEach(s => pInfo[s.period] = s);
+    let html = '<div class="table-responsive"><table class="timetable"><thead><tr><th>Day / Period</th>';
+    pOrder.forEach(p => {
+        if (pInfo[p]) {
+            const pi = pInfo[p];
+            html += `<th class="${pi.type === 'break' ? 'break-header' : ''}">${pi.type === 'break' ? (pi.label || 'Break') : 'P'+pi.period}<br><small>${pi.start}-${pi.end}</small></th>`;
         }
     });
-
-    // Use ordered periods
-    periodOrder.forEach(p => {
-        if (periodInfo[p]) {
-            allPeriods.push(periodInfo[p]);
-        }
-    });
-
-    if (allPeriods.length === 0) {
-        // Fallback if no slots
-        container.innerHTML = `
-            <div class="alert alert-warning">
-                <i class="bi bi-exclamation-triangle"></i> No time slots found. Please generate time slots first.
-            </div>
-        `;
-        return;
-    }
-
-    let html = `
-        <div class="table-responsive">
-        <table class="timetable">
-            <thead>
-                <tr>
-                    <th class="period-header">Day / Period</th>
-                    ${allPeriods.map(p => {
-                        const isBreak = p.type === 'break';
-                        const headerClass = isBreak ? 'break-header' : '';
-                        const label = isBreak ? (p.label || 'Break') : `Period ${p.period}`;
-                        return `
-                            <th class="${headerClass}">
-                                ${label}<br>
-                                <small>${p.start} - ${p.end}</small>
-                            </th>
-                        `;
-                    }).join('')}
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
+    html += '</tr></thead><tbody>';
     days.forEach(day => {
         html += `<tr><td class="day-header">${day}</td>`;
-
-        allPeriods.forEach(periodData => {
-            const isBreak = periodData.type === 'break';
-
-            if (isBreak) {
-                html += `<td class="slot-cell break-cell">
-                    <div class="break-label">${periodData.label || 'Break'}</div>
-                </td>`;
-            } else {
-                const slotId = `${day.substring(0, 3)}-P${periodData.period}`;
-                const entry = timetable[slotId];
-
-                if (entry) {
-                    const isPractical = entry.subjectType === 'practical';
-                    const cellClass = isPractical ? 'practical-cell' : '';
-                    html += `
-                        <td class="slot-cell ${cellClass}">
-                            <div class="subject">${entry.subjectName}</div>
-                            ${isPractical ? '<span class="badge bg-success mb-1">Lab</span>' : ''}
-                            <div class="teacher"><i class="bi bi-person"></i> ${entry.teacherName}</div>
-                            <div class="room"><i class="bi bi-door-open"></i> ${entry.roomName}</div>
-                        </td>
-                    `;
+        pOrder.forEach(p => {
+            if (pInfo[p]) {
+                const pi = pInfo[p];
+                if (pi.type === 'break') {
+                    html += `<td class="slot-cell break-cell">${pi.label || 'Break'}</td>`;
                 } else {
-                    html += `<td class="slot-cell empty">-</td>`;
+                    const slotId = `${day.substring(0, 3)}-P${pi.period}`;
+                    const e = timetable[slotId];
+                    if (e) {
+                        if (e.batchSchedule) {
+                            let filteredBatches = Object.entries(e.batchSchedule);
+                            if (batchFilter) {
+                                filteredBatches = filteredBatches.filter(([b]) => b === batchFilter);
+                            }
+                            
+                            if (filteredBatches.length > 0) {
+                                let g = filteredBatches.map(([b, i]) => `
+                                    <div class="batch-item"><span class="badge bg-info">${b}</span><strong>${escapeHtmlDisplay(i.subjectName)}</strong><br><small>${escapeHtmlDisplay(i.teacherName)} | ${escapeHtmlDisplay(i.roomName)}</small></div>`).join('');
+                                html += `<td class="slot-cell batch-practical-cell"><div class="batch-grid">${g}</div></td>`;
+                            } else {
+                                html += '<td class="slot-cell empty">-</td>';
+                            }
+                        } else {
+                            html += `<td class="slot-cell ${e.subjectType === 'practical' ? 'practical-cell' : ''}"><div class="subject">${escapeHtmlDisplay(e.subjectName)}</div><div class="teacher">${escapeHtmlDisplay(e.teacherName)}</div><div class="room">${escapeHtmlDisplay(e.roomName)}</div></td>`;
+                        }
+                    } else { html += '<td class="slot-cell empty">-</td>'; }
                 }
             }
         });
         html += '</tr>';
     });
-
     html += '</tbody></table></div>';
     container.innerHTML = html;
 }
-
-// Listen for class selection changes
-document.addEventListener('DOMContentLoaded', () => {
-    const classSelect = document.getElementById('timetableClass');
-    if (classSelect) {
-        classSelect.addEventListener('change', async () => {
-            const classId = classSelect.value;
-            if (classId) {
-                await displayTimetable(classId);
-            } else {
-                document.getElementById('timetableContainer').innerHTML = `
-                    <div class="empty-state">
-                        <i class="bi bi-calendar-x"></i>
-                        <h5>No Timetable Generated</h5>
-                        <p>Click "Generate Timetable" to create a schedule</p>
-                    </div>
-                `;
-            }
-        });
-    }
-});
+window.displayTimetableWithBatchFilter = displayTimetable;

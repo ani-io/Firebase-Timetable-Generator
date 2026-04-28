@@ -1,0 +1,34 @@
+# Environment and Configuration
+.env
+.env.local
+.env.*.local
+js/config.js
+
+# Firebase credentials (if stored locally)
+firebase-credentials.json
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+
+# IDE and Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies (if using npm)
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
