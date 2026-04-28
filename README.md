@@ -99,7 +99,7 @@
    └────────────────────┘    └──────────────────────┘
 ```
 
-**No build system. No server. No npm.** All scripts load via `<script>` tags in order — Firebase SDK → `firebase-config.js` → `config.js` → `auth.js` → dashboard JS.
+**No build system. No server. No npm.** All scripts load via `<script>` tags in order — Firebase SDK → `firebase-config.js` → `config.js` → `auth.js` → dashboard JS. Both config files are committed to the repo — just update the values inside them.
 
 ---
 
@@ -166,9 +166,9 @@ const firebaseConfig = {
 
 ---
 
-### Step 4 — Create `js/config.js` *(gitignored — must be created manually)*
+### Step 4 — Update `js/config.js`
 
-This file is in `.gitignore` and **does not exist** after cloning. You must create it:
+This file is included in the repository. Open it and replace the placeholder values with your actual keys:
 
 ```javascript
 // js/config.js

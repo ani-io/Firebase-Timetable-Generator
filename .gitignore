@@ -2,7 +2,6 @@
 .env
 .env.local
 .env.*.local
-js/config.js
 
 # Firebase credentials (if stored locally)
 firebase-credentials.json
