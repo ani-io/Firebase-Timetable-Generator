@@ -21,9 +21,11 @@ body {
 .login-container {
     min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    padding: 2rem 1rem;
 }
 
 .login-card {
@@ -594,4 +596,97 @@ body {
 
 .timetable-summary-card .card-footer {
     border-top: 1px solid #e9ecef;
+}
+
+/* Footer Styles */
+.app-footer {
+    background: white;
+    padding: 1.5rem;
+    margin-top: 2rem;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.03);
+}
+
+.footer-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.footer-copyright {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 0.4rem;
+}
+
+.footer-dev-team {
+    font-size: 0.85rem;
+    color: #495057;
+    margin-bottom: 0.8rem;
+}
+
+.footer-dev-team .dev-names {
+    color: var(--primary-color);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.footer-dev-team .dev-names:hover {
+    color: var(--secondary-color);
+    text-decoration: underline !important;
+    text-underline-offset: 3px;
+}
+
+.footer-badges {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.footer-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: #adb5bd;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.footer-badge:hover {
+    color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.footer-badge i {
+    font-size: 1rem;
+}
+
+/* Adjustments for login page footer */
+.login-container .app-footer {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin-top: 2rem;
+    width: 100%;
+    max-width: 420px;
+}
+
+.login-container .footer-copyright,
+.login-container .footer-dev-team,
+.login-container .footer-badge {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.login-container .footer-dev-team .dev-names {
+    color: white;
+}
+
+.login-container .footer-badge:hover {
+    color: white;
 }

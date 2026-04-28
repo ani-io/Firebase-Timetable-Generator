@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Our Developers - CleriTime</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="css/style.css" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════════
+           DEVELOPERS PAGE — PREMIUM STYLES
+           ═══════════════════════════════════════════════ */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: #0a0a1a;
+            min-height: 100vh;
+            overflow-x: hidden;
+            color: #fff;
+        }
+
+        /* ── Animated Gradient Background ── */
+        .dev-page-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3e 25%, #0d0d2b 50%, #16213e 75%, #0a0a1a 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%   { background-position: 0% 50%; }
+            50%  { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* ── Floating Orbs (Decorative) ── */
+        .orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .orb-1 {
+            width: 400px;
+            height: 400px;
+            background: #4361ee;
+            top: -100px;
+            right: -100px;
+            animation: orbFloat1 8s ease-in-out infinite;
+        }
+
+        .orb-2 {
+            width: 350px;
+            height: 350px;
+            background: #f72585;
+            bottom: -80px;
+            left: -80px;
+            animation: orbFloat2 10s ease-in-out infinite;
+        }
+
+        .orb-3 {
+            width: 250px;
+            height: 250px;
+            background: #4cc9f0;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: orbFloat3 12s ease-in-out infinite;
+        }
+
+        @keyframes orbFloat1 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50%      { transform: translate(-60px, 40px) scale(1.1); }
+        }
+        @keyframes orbFloat2 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50%      { transform: translate(40px, -50px) scale(1.15); }
+        }
+        @keyframes orbFloat3 {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50%      { transform: translate(-40%, -60%) scale(0.9); }
+        }
+
+        /* ── Page Content Container ── */
+        .dev-page-content {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px 60px;
+        }
+
+        /* ── Back Button ── */
+        .back-btn {
+            position: absolute;
+            top: 28px;
+            left: 28px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            transform: translateX(-4px);
+            border-color: rgba(67, 97, 238, 0.4);
+        }
+
+        /* ── Header Section ── */
+        .dev-header {
+            text-align: center;
+            margin-bottom: 60px;
+            animation: fadeInDown 0.8s ease;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .dev-header .brand-icon {
+            font-size: 48px;
+            background: linear-gradient(135deg, #4361ee, #4cc9f0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 16px;
+            display: inline-block;
+        }
+
+        .dev-header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #a0a0c0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+        }
+
+        .dev-header .subtitle {
+            font-size: 1.15rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 300;
+            max-width: 500px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .dev-header .accent-line {
+            width: 80px;
+            height: 4px;
+            background: linear-gradient(90deg, #4361ee, #f72585);
+            border-radius: 4px;
+            margin: 20px auto 0;
+        }
+
+        /* ── Cards Grid ── */
+        .dev-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            max-width: 1400px;
+            width: 100%;
+            padding: 0 20px;
+        }
+
+        /* ── Developer Card ── */
+        .dev-card {
+            position: relative;
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px 28px 32px;
+            text-align: center;
+            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+            overflow: hidden;
+            animation: cardEntrance 0.8s ease forwards;
+            opacity: 0;
+        }
+
+        .dev-card:nth-child(1) { animation-delay: 0.1s; }
+        .dev-card:nth-child(2) { animation-delay: 0.25s; }
+        .dev-card:nth-child(3) { animation-delay: 0.4s; }
+        .dev-card:nth-child(4) { animation-delay: 0.55s; }
+
+        @keyframes cardEntrance {
+            from { opacity: 0; transform: translateY(40px) scale(0.95); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Card glow on hover */
+        .dev-card::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: 24px;
+            padding: 1px;
+            background: linear-gradient(135deg, transparent, transparent);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            transition: background 0.5s ease;
+            pointer-events: none;
+        }
+
+        .dev-card:hover::before {
+            background: linear-gradient(135deg, #4361ee, #f72585, #4cc9f0);
+        }
+
+        /* Shimmer line at top */
+        .dev-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(67, 97, 238, 0), transparent);
+            transition: all 0.5s ease;
+        }
+
+        .dev-card:hover::after {
+            width: 80%;
+            background: linear-gradient(90deg, transparent, #4361ee, transparent);
+        }
+
+        .dev-card:hover {
+            transform: translateY(-12px);
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(255, 255, 255, 0.12);
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.3),
+                0 0 40px rgba(67, 97, 238, 0.1);
+        }
+
+        /* ── Avatar ── */
+        .dev-avatar-wrapper {
+            position: relative;
+            width: 110px;
+            height: 110px;
+            margin: 0 auto 24px;
+        }
+
+        .dev-avatar {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #fff;
+            position: relative;
+            z-index: 1;
+            transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .dev-card:hover .dev-avatar {
+            transform: scale(1.08);
+        }
+
+        /* Rotating ring around avatar */
+        .avatar-ring {
+            position: absolute;
+            inset: -6px;
+            border-radius: 50%;
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            animation: ringRotate 20s linear infinite;
+        }
+
+        .dev-card:hover .avatar-ring {
+            border-color: rgba(67, 97, 238, 0.4);
+            animation-duration: 8s;
+        }
+
+        @keyframes ringRotate {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+
+        /* Pulse dot (online indicator) */
+        .avatar-status {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #22c55e;
+            border: 3px solid #0a0a1a;
+            z-index: 2;
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            50%      { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+        }
+
+        /* ── Card Gradient Presets ── */
+        .dev-avatar.gradient-1 {
+            background: linear-gradient(135deg, #4361ee, #3a0ca3);
+        }
+        .dev-avatar.gradient-2 {
+            background: linear-gradient(135deg, #f72585, #b5179e);
+        }
+        .dev-avatar.gradient-3 {
+            background: linear-gradient(135deg, #4cc9f0, #4895ef);
+        }
+        .dev-avatar.gradient-4 {
+            background: linear-gradient(135deg, #f4a261, #e76f51);
+        }
+
+        /* ── Card Text ── */
+        .dev-name {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+            letter-spacing: -0.3px;
+        }
+
+        .dev-role {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.45);
+            margin-bottom: 16px;
+            font-weight: 400;
+        }
+
+        .dev-role-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 14px;
+            border-radius: 50px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 18px;
+        }
+
+        .badge-lead {
+            background: rgba(67, 97, 238, 0.15);
+            color: #818cf8;
+            border: 1px solid rgba(67, 97, 238, 0.25);
+        }
+        .badge-frontend {
+            background: rgba(247, 37, 133, 0.15);
+            color: #f472b6;
+            border: 1px solid rgba(247, 37, 133, 0.25);
+        }
+        .badge-backend {
+            background: rgba(76, 201, 240, 0.15);
+            color: #67e8f9;
+            border: 1px solid rgba(76, 201, 240, 0.25);
+        }
+        .badge-design {
+            background: rgba(244, 162, 97, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(244, 162, 97, 0.25);
+        }
+
+        /* ── Divider ── */
+        .dev-divider {
+            width: 40px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.08);
+            margin: 0 auto 16px;
+            border-radius: 2px;
+            transition: all 0.4s ease;
+        }
+
+        .dev-card:hover .dev-divider {
+            width: 60px;
+            background: linear-gradient(90deg, #4361ee, #f72585);
+        }
+
+        /* ── Bio ── */
+        .dev-bio {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.4);
+            line-height: 1.7;
+            margin-bottom: 20px;
+        }
+
+        /* ── Tech Stack ── */
+        .dev-tech {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .tech-tag {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.68rem;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            color: rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .dev-card:hover .tech-tag {
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* ── Social Links ── */
+        .dev-socials {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .social-link {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .social-link:hover {
+            background: rgba(67, 97, 238, 0.2);
+            border-color: rgba(67, 97, 238, 0.4);
+            color: #818cf8;
+            transform: translateY(-3px);
+        }
+
+        /* ── Footer on Developers Page ── */
+        .dev-page-footer {
+            margin-top: 60px;
+            text-align: center;
+            animation: fadeInDown 1s ease;
+        }
+
+        .dev-page-footer p {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .dev-page-footer .brand-name {
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+        }
+
+        .dev-page-footer i {
+            color: #f72585;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .dev-header h1 {
+                font-size: 2rem;
+            }
+            .dev-cards-grid {
+                grid-template-columns: 1fr;
+                max-width: 380px;
+            }
+            .back-btn {
+                top: 16px;
+                left: 16px;
+            }
+        }
+
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .dev-cards-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="dev-page-bg"></div>
+
+    <!-- Floating Orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <!-- Page Content -->
+    <div class="dev-page-content">
+        <!-- Back Button -->
+        <a href="index.html" class="back-btn">
+            <i class="bi bi-arrow-left"></i> Back to CleriTime
+        </a>
+
+        <!-- Header -->
+        <header class="dev-header">
+            <i class="bi bi-calendar3 brand-icon"></i>
+            <h1>Meet Our Developers</h1>
+            <p class="subtitle">The talented team behind CleriTime — crafting intelligent timetable solutions for modern education.</p>
+            <div class="accent-line"></div>
+        </header>
+
+        <!-- Developer Cards -->
+        <div class="dev-cards-grid">
+
+            <!-- Developer 1: Aniruddha Joshi -->
+            <div class="dev-card">
+                <div class="dev-avatar-wrapper">
+                    <div class="dev-avatar gradient-1">AJ</div>
+                    <div class="avatar-ring"></div>
+                    <div class="avatar-status"></div>
+                </div>
+                <h3 class="dev-name">Aniruddha Joshi</h3>
+                <p class="dev-role">Project Lead & Full-Stack Developer</p>
+                <span class="dev-role-badge badge-lead"><i class="bi bi-star-fill"></i> Team Lead</span>
+                <div class="dev-divider"></div>
+                <p class="dev-bio">Architected the core scheduling engine and led the development of CleriTime from concept to deployment.</p>
+                <div class="dev-tech">
+                    <span class="tech-tag">JavaScript</span>
+                    <span class="tech-tag">Firebase</span>
+                    <span class="tech-tag">Algorithms</span>
+                    <span class="tech-tag">AI</span>
+                </div>
+                <div class="dev-socials">
+                    <a href="#" class="social-link" title="GitHub"><i class="bi bi-github"></i></a>
+                    <a href="#" class="social-link" title="LinkedIn"><i class="bi bi-linkedin"></i></a>
+                    <a href="#" class="social-link" title="Email"><i class="bi bi-envelope"></i></a>
+                </div>
+            </div>
+
+            <!-- Developer 2: Nikhil Singh -->
+            <div class="dev-card">
+                <div class="dev-avatar-wrapper">
+                    <div class="dev-avatar gradient-3">NS</div>
+                    <div class="avatar-ring"></div>
+                    <div class="avatar-status"></div>
+                </div>
+                <h3 class="dev-name">Nikhil Singh</h3>
+                <p class="dev-role">Backend Developer & Database Engineer</p>
+                <span class="dev-role-badge badge-backend"><i class="bi bi-database-fill"></i> Backend</span>
+                <div class="dev-divider"></div>
+                <p class="dev-bio">Built robust Firebase integrations, security rules, and real-time data synchronization systems.</p>
+                <div class="dev-tech">
+                    <span class="tech-tag">Firebase</span>
+                    <span class="tech-tag">NoSQL</span>
+                    <span class="tech-tag">Security</span>
+                    <span class="tech-tag">APIs</span>
+                </div>
+                <div class="dev-socials">
+                    <a href="#" class="social-link" title="GitHub"><i class="bi bi-github"></i></a>
+                    <a href="#" class="social-link" title="LinkedIn"><i class="bi bi-linkedin"></i></a>
+                    <a href="#" class="social-link" title="Email"><i class="bi bi-envelope"></i></a>
+                </div>
+            </div>
+
+            <!-- Developer 3: Raj Bodke -->
+            <div class="dev-card">
+                <div class="dev-avatar-wrapper">
+                    <div class="dev-avatar gradient-2">RB</div>
+                    <div class="avatar-ring"></div>
+                    <div class="avatar-status"></div>
+                </div>
+                <h3 class="dev-name">Raj Bodke</h3>
+                <p class="dev-role">UI Designer & System Architect</p>
+                <span class="dev-role-badge badge-frontend"><i class="bi bi-palette-fill"></i> UI / Design</span>
+                <div class="dev-divider"></div>
+                <p class="dev-bio">Instrumental in defining the software architecture and designing the intuitive user interface components.</p>
+                <div class="dev-tech">
+                    <span class="tech-tag">UI Design</span>
+                    <span class="tech-tag">Definition</span>
+                    <span class="tech-tag">UX Strategy</span>
+                    <span class="tech-tag">Figma</span>
+                </div>
+                <div class="dev-socials">
+                    <a href="#" class="social-link" title="GitHub"><i class="bi bi-github"></i></a>
+                    <a href="#" class="social-link" title="LinkedIn"><i class="bi bi-linkedin"></i></a>
+                    <a href="#" class="social-link" title="Email"><i class="bi bi-envelope"></i></a>
+                </div>
+            </div>
+
+            <!-- Developer 4: Pranav Yadav -->
+            <div class="dev-card">
+                <div class="dev-avatar-wrapper">
+                    <div class="dev-avatar gradient-4">PY</div>
+                    <div class="avatar-ring"></div>
+                    <div class="avatar-status"></div>
+                </div>
+                <h3 class="dev-name">Pranav Yadav</h3>
+                <p class="dev-role">UI Designer & System Analyst</p>
+                <span class="dev-role-badge badge-design"><i class="bi bi-pencil-square"></i> UI / Design</span>
+                <div class="dev-divider"></div>
+                <p class="dev-bio">Focused on software definitions and visual aesthetics to ensure a seamless scheduling experience.</p>
+                <div class="dev-tech">
+                    <span class="tech-tag">UI Design</span>
+                    <span class="tech-tag">Software Specs</span>
+                    <span class="tech-tag">Analysis</span>
+                    <span class="tech-tag">UX Design</span>
+                </div>
+                <div class="dev-socials">
+                    <a href="#" class="social-link" title="GitHub"><i class="bi bi-github"></i></a>
+                    <a href="#" class="social-link" title="LinkedIn"><i class="bi bi-linkedin"></i></a>
+                    <a href="#" class="social-link" title="Email"><i class="bi bi-envelope"></i></a>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Page Footer -->
+        <div class="dev-page-footer">
+            <p><i class="bi bi-heart-fill"></i> Built with passion for <span class="brand-name">CleriTime</span></p>
+            <p>&copy; 2026 CleriTime. All rights reserved.</p>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

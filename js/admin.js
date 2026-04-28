@@ -93,6 +93,7 @@ function showSection(sectionName) {
         populateClassBatchDropdown();
     } else if (sectionName === 'subjects') {
         populateSubjectDropdowns();
+        autoGenerateSubjectId();
     } else if (sectionName === 'timetable') {
         populateTimetableDropdown();
         loadExistingTimetables();
@@ -901,10 +902,30 @@ function renderSubjectsTable() {
     const tbody = document.getElementById('subjectsTableBody');
     const subjects = Object.entries(subjectsData);
 
+    // Sort subjects by name, then by code
+    subjects.sort((a, b) => {
+        const nameA = (a[1].name || '').toLowerCase();
+        const nameB = (b[1].name || '').toLowerCase();
+        if (nameA !== nameB) return nameA.localeCompare(nameB);
+
+        const codeA = (a[1].code || a[0]).toLowerCase();
+        const codeB = (b[1].code || b[0]).toLowerCase();
+        if (codeA !== codeB) return codeA.localeCompare(codeB);
+
+        // Third level: by class name if everything else matches
+        const classA = (classesData[a[1].classId]?.name || '').toLowerCase();
+        const classB = (classesData[b[1].classId]?.name || '').toLowerCase();
+        return classA.localeCompare(classB);
+    });
+
     if (subjects.length === 0) {
+        document.getElementById('subjectSummaryRow').innerHTML = '';
         tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No subjects added yet</td></tr>';
         return;
     }
+
+    // Update the summary row with counts per year prefix
+    updateSubjectSummary(subjects);
 
     tbody.innerHTML = subjects.map(([id, data]) => {
         const className = classesData[data.classId]?.name || data.classId;
@@ -966,27 +987,36 @@ function renderSubjectsTable() {
 function populateSubjectDropdowns() {
     // Populate class dropdown
     const classSelect = document.getElementById('subjectClass');
-    classSelect.innerHTML = '<option value="">Select Class</option>';
-    Object.entries(classesData).forEach(([id, data]) => {
-        classSelect.innerHTML += `<option value="${id}">${data.name} (${id})</option>`;
-    });
+    if (classSelect) {
+        classSelect.innerHTML = '<option value="">Select Class</option>';
+        Object.entries(classesData)
+            .sort((a, b) => (a[1].name || '').toLowerCase().localeCompare((b[1].name || '').toLowerCase()))
+            .forEach(([id, data]) => {
+                classSelect.innerHTML += `<option value="${id}">${data.name} (${id})</option>`;
+            });
+    }
 
     // Populate teacher dropdown
     const teacherSelect = document.getElementById('subjectTeacher');
-    teacherSelect.innerHTML = '<option value="">Select Teacher</option>';
-    Object.entries(teachersData).forEach(([id, data]) => {
-        teacherSelect.innerHTML += `<option value="${id}">${data.name} (${id})</option>`;
-    });
+    if (teacherSelect) {
+        teacherSelect.innerHTML = '<option value="">Select Teacher</option>';
+        Object.entries(teachersData)
+            .sort((a, b) => (a[1].name || '').toLowerCase().localeCompare((b[1].name || '').toLowerCase()))
+            .forEach(([id, data]) => {
+                teacherSelect.innerHTML += `<option value="${id}">${data.name} (${id})</option>`;
+            });
+    }
 
     // Populate lab room dropdown (only labs)
     const labSelect = document.getElementById('labRoom');
     if (labSelect) {
         labSelect.innerHTML = '<option value="">Select Lab</option>';
-        Object.entries(roomsData).forEach(([id, data]) => {
-            if (data.type === 'lab') {
+        Object.entries(roomsData)
+            .filter(([_, data]) => data.type === 'lab')
+            .sort((a, b) => (a[1].name || '').toLowerCase().localeCompare((b[1].name || '').toLowerCase()))
+            .forEach(([id, data]) => {
                 labSelect.innerHTML += `<option value="${id}">${data.name} (${id})</option>`;
-            }
-        });
+            });
     }
 }
 
@@ -1060,13 +1090,16 @@ function populateBatchAssignments() {
     }
 
     // Build teacher options
-    const teacherOptions = Object.entries(teachersData).map(([id, data]) =>
-        `<option value="${escapeHtml(id)}">${escapeHtml(data.name)}</option>`
-    ).join('');
+    const teacherOptions = Object.entries(teachersData)
+        .sort((a, b) => (a[1].name || '').toLowerCase().localeCompare((b[1].name || '').toLowerCase()))
+        .map(([id, data]) =>
+            `<option value="${escapeHtml(id)}">${escapeHtml(data.name)}</option>`
+        ).join('');
 
     // Build lab options
     const labOptions = Object.entries(roomsData)
         .filter(([_, room]) => room.type === 'lab')
+        .sort((a, b) => (a[1].name || '').toLowerCase().localeCompare((b[1].name || '').toLowerCase()))
         .map(([id, data]) =>
             `<option value="${escapeHtml(id)}">${escapeHtml(data.name)}</option>`
         ).join('');
@@ -1112,6 +1145,52 @@ function populateBatchAssignments() {
     container.appendChild(table);
 }
 
+// Update subject summary row with counts per year prefix
+function updateSubjectSummary(subjects) {
+    const summaryRow = document.getElementById('subjectSummaryRow');
+    if (!summaryRow) return;
+
+    const counts = { FY: 0, SY: 0, TE: 0, BE: 0 };
+    
+    subjects.forEach(([id, data]) => {
+        const code = (data.code || '').toUpperCase();
+        if (code.startsWith('FY')) counts.FY++;
+        else if (code.startsWith('SY')) counts.SY++;
+        else if (code.startsWith('TE')) counts.TE++;
+        else if (code.startsWith('BE')) counts.BE++;
+    });
+
+    summaryRow.innerHTML = `
+        <span class="badge bg-primary px-3 py-2">FY: ${counts.FY}</span>
+        <span class="badge bg-success px-3 py-2">SY: ${counts.SY}</span>
+        <span class="badge bg-warning text-dark px-3 py-2">TE: ${counts.TE}</span>
+        <span class="badge bg-danger px-3 py-2">BE: ${counts.BE}</span>
+        <span class="badge bg-secondary px-3 py-2">Total: ${subjects.length}</span>
+    `;
+}
+
+// Function to generate a unique Subject ID
+function autoGenerateSubjectId() {
+    const input = document.getElementById('subjectId');
+    if (!input) return;
+
+    // Find the next available SY/SUB number
+    const existingIds = Object.keys(subjectsData);
+    let maxNum = 0;
+    
+    existingIds.forEach(id => {
+        // Try to find numbers in IDs like SY18 or SUB33
+        const match = id.match(/\d+/);
+        if (match) {
+            const num = parseInt(match[0]);
+            if (num > maxNum) maxNum = num;
+        }
+    });
+
+    const nextNum = maxNum + 1;
+    input.value = `SUB${nextNum.toString().padStart(3, '0')}`;
+}
+
 // Listen for class selection changes to update batch assignments
 document.addEventListener('DOMContentLoaded', () => {
     const classSelect = document.getElementById('subjectClass');
@@ -1127,6 +1206,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function addSubject() {
     const subjectId = document.getElementById('subjectId').value.trim();
+    
+    // Check if ID already exists to prevent accidental overwrite
+    if (subjectsData[subjectId]) {
+        const confirmOverwrite = confirm(`Subject ID "${subjectId}" already exists. Adding this will REPLACE the existing subject. Do you want to continue?`);
+        if (!confirmOverwrite) return;
+    }
+
     const code = document.getElementById('subjectCode').value.trim();
     const name = document.getElementById('subjectName').value.trim();
     const subjectType = document.getElementById('subjectType').value;
@@ -1135,8 +1221,31 @@ async function addSubject() {
     const lecturesPerWeek = parseInt(document.getElementById('lecturesPerWeek').value);
     const totalLectures = parseInt(document.getElementById('totalLectures').value);
 
+    // Validation
+    const upperCode = code.toUpperCase();
+    const validPrefixes = ['FY', 'SY', 'TE', 'BE'];
+    const hasValidPrefix = validPrefixes.some(prefix => upperCode.startsWith(prefix));
+
+    if (!subjectId) { showToast('Subject ID is required', 'warning'); return; }
+    if (!code) { showToast('Subject Code is required', 'warning'); return; }
+    if (!hasValidPrefix) { 
+        showToast('Invalid Subject Code! Must start with FY, SY, TE, or BE (e.g., SY101)', 'danger'); 
+        return; 
+    }
+    if (!name) { showToast('Subject Name is required', 'warning'); return; }
+    if (!classId) { showToast('Please select a Class', 'warning'); return; }
+    
+    if (isNaN(lecturesPerWeek) || lecturesPerWeek <= 0) {
+        showToast('Please enter a valid number for Sessions Per Week', 'warning');
+        return;
+    }
+    if (isNaN(totalLectures) || totalLectures <= 0) {
+        showToast('Please enter a valid number for Total Lectures', 'warning');
+        return;
+    }
+
     const subjectData = {
-        code,
+        code: upperCode,
         name,
         type: subjectType,
         classId,
@@ -1188,6 +1297,7 @@ async function addSubject() {
         console.log('Subject added successfully:', subjectId);
         showToast('Subject added successfully!', 'success');
         document.getElementById('subjectForm').reset();
+        autoGenerateSubjectId();
         document.getElementById('practicalFields').style.display = 'none';
         document.getElementById('singleLabFields').style.display = 'none';
         document.getElementById('batchBasedFields').style.display = 'none';
@@ -1308,6 +1418,15 @@ function editSubject(subjectId) {
         </div>
     `, async () => {
         const code = document.getElementById('editSubjectCode').value.trim();
+        const upperCode = code.toUpperCase();
+        const validPrefixes = ['FY', 'SY', 'TE', 'BE'];
+        const hasValidPrefix = validPrefixes.some(prefix => upperCode.startsWith(prefix));
+
+        if (!hasValidPrefix) {
+            showToast('Invalid Subject Code! Must start with FY, SY, TE, or BE (e.g., SY101)', 'danger');
+            return;
+        }
+
         const name = document.getElementById('editSubjectName').value.trim();
         const type = document.getElementById('editSubjectType').value;
         const classId = document.getElementById('editSubjectClass').value;
@@ -1315,7 +1434,7 @@ function editSubject(subjectId) {
         const lecturesPerWeek = parseInt(document.getElementById('editLecturesPerWeek').value);
         const totalLectures = parseInt(document.getElementById('editTotalLectures').value);
 
-        const updateData = { code, name, type, classId, teacherId, lecturesPerWeek, totalLectures };
+        const updateData = { code: upperCode, name, type, classId, teacherId, lecturesPerWeek, totalLectures };
 
         if (type === 'practical') {
             updateData.practicalDuration = parseInt(document.getElementById('editPracticalDuration').value) || 2;
@@ -1661,8 +1780,25 @@ function populateTimetableDropdown() {
         select.innerHTML += `<option value="${id}">${data.name} (${id})</option>`;
     });
 
-    // Also populate batch filter dropdown when class changes
-    select.addEventListener('change', populateBatchFilterDropdown);
+    select.onchange = async () => {
+        populateBatchFilterDropdown();
+        if (select.value) {
+            if (typeof displayTimetable === 'function') {
+                await displayTimetable(select.value);
+                const tSnap = await database.ref(`timetables/${select.value}`).once('value');
+                const tData = tSnap.val();
+                if (tData && tData.status) {
+                    showTimetableActions(select.value, tData);
+                } else {
+                    document.getElementById('saveDraftBtn').style.display = 'none';
+                    document.getElementById('publishBtn').style.display = 'none';
+                    document.getElementById('exportExcelBtn').style.display = 'none';
+                }
+            }
+        } else {
+            loadExistingTimetables();
+        }
+    };
 }
 
 // Populate batch filter dropdown based on selected class
@@ -3240,20 +3376,57 @@ async function updateTimetableStatusBadge(classId) {
 
 // Save timetable as draft
 async function saveTimetableAsDraft() {
-    if (!currentTimetableClassId || !currentTimetableData) {
-        showToast('No timetable to save', 'danger');
-        return;
-    }
+    if (!currentTimetableClassId) return;
 
     try {
-        // Save timetable with draft status
-        await database.ref(`timetables/${currentTimetableClassId}`).update({
-            status: 'draft',
-            updatedAt: Date.now(),
-            updatedBy: auth.currentUser.uid
-        });
+        const previewData = window.previewTimetables ? window.previewTimetables[currentTimetableClassId] : null;
 
-        showToast('Timetable saved as draft', 'success');
+        if (previewData) {
+            // Check limit: 3 drafts per day per admin
+            const today = new Date().toDateString();
+            const snapshot = await database.ref('timetables').once('value');
+            const timetables = snapshot.val() || {};
+            const adminId = auth.currentUser.uid;
+            
+            let draftsToday = 0;
+            Object.keys(timetables).forEach(key => {
+                const t = timetables[key];
+                if (t.status === 'draft' && t.updatedBy === adminId && t.baseClassId === currentTimetableClassId) {
+                    if (t.updatedAt && new Date(t.updatedAt).toDateString() === today) {
+                        draftsToday++;
+                    }
+                }
+            });
+            
+            if (draftsToday >= 3) {
+                showToast('Limit reached: You can only save 3 drafts per class per day.', 'danger');
+                return;
+            }
+
+            const timestamp = Date.now();
+            const dateStr = new Date(timestamp).toLocaleString();
+            const className = classesData[currentTimetableClassId]?.name || currentTimetableClassId;
+            const draftId = `${currentTimetableClassId}_draft_${timestamp}`;
+            
+            await database.ref(`timetables/${draftId}`).set({
+                ...previewData,
+                status: 'draft',
+                baseClassId: currentTimetableClassId,
+                draftName: `${className} - ${dateStr}`,
+                updatedAt: timestamp,
+                updatedBy: adminId
+            });
+            delete window.previewTimetables[currentTimetableClassId];
+            showToast('New timetable combination saved as draft!', 'success');
+        } else {
+            await database.ref(`timetables/${currentTimetableClassId}`).update({
+                status: 'draft',
+                updatedAt: Date.now(),
+                updatedBy: auth.currentUser.uid
+            });
+            showToast('Timetable saved as draft', 'success');
+        }
+
         updateTimetableStatusBadge(currentTimetableClassId);
         loadSavedTimetables();
     } catch (error) {
@@ -3263,22 +3436,30 @@ async function saveTimetableAsDraft() {
 
 // Publish timetable
 async function publishTimetable() {
-    if (!currentTimetableClassId || !currentTimetableData) {
-        showToast('No timetable to publish', 'danger');
-        return;
-    }
+    if (!currentTimetableClassId) return;
 
     if (!confirm('Are you sure you want to publish this timetable? It will be visible to all users.')) {
         return;
     }
 
     try {
-        // Update status to published
-        await database.ref(`timetables/${currentTimetableClassId}`).update({
-            status: 'published',
-            publishedAt: Date.now(),
-            publishedBy: auth.currentUser.uid
-        });
+        const previewData = window.previewTimetables ? window.previewTimetables[currentTimetableClassId] : null;
+
+        if (previewData) {
+            await database.ref(`timetables/${currentTimetableClassId}`).set({
+                ...previewData,
+                status: 'published',
+                publishedAt: Date.now(),
+                publishedBy: auth.currentUser.uid
+            });
+            delete window.previewTimetables[currentTimetableClassId];
+        } else {
+            await database.ref(`timetables/${currentTimetableClassId}`).update({
+                status: 'published',
+                publishedAt: Date.now(),
+                publishedBy: auth.currentUser.uid
+            });
+        }
 
         showToast('Timetable published successfully!', 'success');
         updateTimetableStatusBadge(currentTimetableClassId);
@@ -3302,7 +3483,8 @@ async function loadSavedTimetables() {
             if (data.status) {
                 timetableList.push({
                     classId,
-                    className: classesData[classId]?.name || classId,
+                    baseClassId: data.baseClassId || classId,
+                    className: data.draftName || classesData[data.baseClassId || classId]?.name || classId,
                     status: data.status,
                     updatedAt: data.updatedAt,
                     publishedAt: data.publishedAt
@@ -3317,9 +3499,12 @@ async function loadSavedTimetables() {
 
         container.innerHTML = `
             <div class="table-responsive">
-                <table class="table table-sm table-hover">
+                <table class="table table-sm table-hover" id="savedTimetablesTable">
                     <thead>
                         <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" class="form-check-input" id="selectAllTimetables" onchange="toggleSelectAllTimetables(this)">
+                            </th>
                             <th>Class</th>
                             <th>Status</th>
                             <th>Last Updated</th>
@@ -3336,6 +3521,9 @@ async function loadSavedTimetables() {
 
                             return `
                                 <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input tt-checkbox" value="${t.classId}" onchange="updateBulkActionState()">
+                                    </td>
                                     <td><strong>${t.className}</strong></td>
                                     <td>${statusBadge}</td>
                                     <td><small>${date}</small></td>
@@ -3352,6 +3540,9 @@ async function loadSavedTimetables() {
                                                 <i class="bi bi-x"></i> Unpublish
                                             </button>
                                         `}
+                                        <button class="btn btn-sm btn-outline-danger" onclick="confirmDeleteTimetable('${t.classId}')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
                                     </td>
                                 </tr>
                             `;
@@ -3360,15 +3551,92 @@ async function loadSavedTimetables() {
                 </table>
             </div>
         `;
+        updateBulkActionState();
     } catch (error) {
         container.innerHTML = `<p class="text-danger">Error loading timetables: ${error.message}</p>`;
     }
 }
 
+// Bulk Actions Logic
+function toggleSelectAllTimetables(master) {
+    const checkboxes = document.querySelectorAll('.tt-checkbox');
+    checkboxes.forEach(cb => cb.checked = master.checked);
+    updateBulkActionState();
+}
+
+function updateBulkActionState() {
+    const checkboxes = document.querySelectorAll('.tt-checkbox');
+    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const bulkBar = document.getElementById('bulkTimetableActions');
+
+    if (checkedCount > 0) {
+        bulkBar.style.display = 'flex';
+        // Update "Select All" state
+        const master = document.getElementById('selectAllTimetables');
+        if (master) master.checked = checkedCount === checkboxes.length;
+    } else {
+        bulkBar.style.display = 'none';
+        const master = document.getElementById('selectAllTimetables');
+        if (master) master.checked = false;
+    }
+}
+
+async function bulkDeleteTimetables() {
+    const checkboxes = document.querySelectorAll('.tt-checkbox:checked');
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+
+    if (ids.length === 0) return;
+
+    if (confirm(`Are you sure you want to delete ${ids.length} selected timetable(s)?`)) {
+        try {
+            const updates = {};
+            ids.forEach(id => {
+                updates[id] = null;
+            });
+            await database.ref('timetables').update(updates);
+            showToast(`${ids.length} timetables deleted!`, 'success');
+            loadSavedTimetables();
+        } catch (error) {
+            showToast('Bulk delete failed: ' + error.message, 'danger');
+        }
+    }
+}
+
+async function bulkPublishTimetables() {
+    const checkboxes = document.querySelectorAll('.tt-checkbox:checked');
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+
+    if (ids.length === 0) return;
+
+    try {
+        const updates = {};
+        ids.forEach(id => {
+            updates[`${id}/status`] = 'published';
+            updates[`${id}/publishedAt`] = Date.now();
+            updates[`${id}/publishedBy`] = auth.currentUser.uid;
+        });
+        await database.ref('timetables').update(updates);
+        showToast(`${ids.length} timetables published!`, 'success');
+        loadSavedTimetables();
+    } catch (error) {
+        showToast('Bulk publish failed: ' + error.message, 'danger');
+    }
+}
+
+async function confirmDeleteTimetable(classId) {
+    if (confirm(`Delete timetable for ${classId}?`)) {
+        try {
+            await database.ref(`timetables/${classId}`).remove();
+            showToast('Timetable deleted!', 'success');
+            loadSavedTimetables();
+        } catch (error) {
+            showToast('Delete failed: ' + error.message, 'danger');
+        }
+    }
+}
+
 // View saved timetable
 async function viewSavedTimetable(classId) {
-    // Set the dropdown and load the timetable
-    document.getElementById('timetableClass').value = classId;
     currentTimetableClassId = classId;
 
     try {
@@ -3377,15 +3645,29 @@ async function viewSavedTimetable(classId) {
 
         if (data) {
             currentTimetableData = data;
-            // The loadExistingTimetables function should handle display
-            // Trigger reload
-            loadExistingTimetables();
+            const baseClassId = data.baseClassId || classId;
+            
+            // Set the dropdown to the base class
+            const select = document.getElementById('timetableClass');
+            if (select) select.value = baseClassId;
+            
+            // Display the specific draft timetable
+            if (typeof displayTimetable === 'function') {
+                await displayTimetable(classId);
+            }
+
             updateTimetableStatusBadge(classId);
 
-            // Show action buttons
-            document.getElementById('saveDraftBtn').style.display = 'inline-block';
-            document.getElementById('publishBtn').style.display = 'inline-block';
-            document.getElementById('aiAnalyzeBtn').style.display = 'inline-block';
+            // Hide the summary and show the container if needed
+            document.getElementById('savedTimetablesContainer').scrollIntoView({ behavior: 'smooth' });
+
+            // Show action buttons safely
+            const sBtn = document.getElementById('saveDraftBtn');
+            const pBtn = document.getElementById('publishBtn');
+            const eBtn = document.getElementById('exportExcelBtn');
+            if (sBtn) sBtn.style.display = 'inline-block';
+            if (pBtn) pBtn.style.display = 'inline-block';
+            if (eBtn) eBtn.style.display = 'inline-block';
         }
     } catch (error) {
         showToast('Error loading timetable: ' + error.message, 'danger');
