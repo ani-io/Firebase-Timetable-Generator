@@ -65,8 +65,21 @@ async function generateTimetable() {
         const targetClasses = selectedClass ? { [selectedClass]: classes[selectedClass] } : classes;
         const timetableEntries = {};
 
-        for (const [classId, classData] of Object.entries(targetClasses)) {
-            log(`Solving ${classData.name} with Unbiased Priority...`);
+        // OPTIMIZATION: Most Constrained Variable First (MCVF)
+        // Sort classes by their total academic load. Hardest classes are solved first to maximize global accuracy.
+        const classEntries = Object.entries(targetClasses).map(([id, data]) => {
+            let totalLoad = 0;
+            Object.values(subjects).filter(s => s.classId === id).forEach(s => {
+                totalLoad += (parseInt(s.lecturesPerWeek) || 0) * (parseInt(s.practicalDuration) || 1);
+            });
+            return { id, data, load: totalLoad };
+        });
+        
+        // Sort descending by load, and add a tiny random factor for tie-breaking
+        classEntries.sort((a, b) => (b.load - a.load) || (Math.random() - 0.5));
+
+        for (const { id: classId, data: classData } of classEntries) {
+            log(`Solving ${classData.name} (Load: ${classData.load}) with Optimal Priority...`);
             timetableEntries[classId] = {};
             const pool = [];
             const batchItemsByBatch = {};
@@ -421,9 +434,12 @@ async function generateTimetable() {
         }
 
         const targetId = selectedClass || Object.keys(targetClasses)[0];
-        displayTimetable(targetId);
+        await displayTimetable(targetId);
+        
         if (typeof showTimetableActions === 'function') {
-            showTimetableActions(targetId, window.previewTimetables[targetId]);
+            setTimeout(() => {
+                showTimetableActions(targetId, window.previewTimetables[targetId]);
+            }, 100);
         }
         showToast('Unified Generation Complete! Previewing...', 'success');
     } catch (e) {
