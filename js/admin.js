@@ -1785,14 +1785,21 @@ function populateTimetableDropdown() {
         if (select.value) {
             if (typeof displayTimetable === 'function') {
                 await displayTimetable(select.value);
-                const tSnap = await database.ref(`timetables/${select.value}`).once('value');
-                const tData = tSnap.val();
-                if (tData && tData.status) {
-                    showTimetableActions(select.value, tData);
+                
+                // If it's a preview in memory, show the actions!
+                if (window.previewTimetables && window.previewTimetables[select.value]) {
+                    showTimetableActions(select.value, window.previewTimetables[select.value]);
                 } else {
-                    document.getElementById('saveDraftBtn').style.display = 'none';
-                    document.getElementById('publishBtn').style.display = 'none';
-                    document.getElementById('exportExcelBtn').style.display = 'none';
+                    // Otherwise check the database
+                    const tSnap = await database.ref(`timetables/${select.value}`).once('value');
+                    const tData = tSnap.val();
+                    if (tData && tData.status) {
+                        showTimetableActions(select.value, tData);
+                    } else {
+                        document.getElementById('saveDraftBtn').style.display = 'none';
+                        document.getElementById('publishBtn').style.display = 'none';
+                        document.getElementById('exportExcelBtn').style.display = 'none';
+                    }
                 }
             }
         } else {
