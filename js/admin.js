@@ -3626,11 +3626,22 @@ async function publishTimetable() {
             });
             delete window.previewTimetables[currentTimetableClassId];
         } else {
-            await database.ref(`timetables/${currentTimetableClassId}`).update({
-                status: 'published',
-                publishedAt: Date.now(),
-                publishedBy: auth.currentUser.uid
-            });
+            const snap = await database.ref(`timetables/${currentTimetableClassId}`).once('value');
+            const data = snap.val();
+            if (data) {
+                const publishData = {
+                    ...data,
+                    status: 'published',
+                    publishedAt: Date.now(),
+                    publishedBy: auth.currentUser.uid
+                };
+                await database.ref(`timetables/${currentTimetableClassId}`).set(publishData);
+                
+                const baseClassId = data.baseClassId || currentTimetableClassId;
+                if (baseClassId !== currentTimetableClassId) {
+                    await database.ref(`timetables/${baseClassId}`).set(publishData);
+                }
+            }
         }
 
         showToast('Timetable published successfully!', 'success');
@@ -3653,6 +3664,14 @@ async function loadSavedTimetables() {
         const timetableList = [];
         Object.entries(timetables).forEach(([classId, data]) => {
             if (data.status) {
+                // Hide base class copies of drafts to prevent duplicate rows
+                const isDraft = classId.includes('_draft_');
+                const hasBaseClassId = !!data.baseClassId;
+                
+                if (!isDraft && hasBaseClassId && classId === data.baseClassId) {
+                    return; // Skip adding mirror copy to the list
+                }
+                
                 timetableList.push({
                     classId,
                     baseClassId: data.baseClassId || classId,
@@ -3762,9 +3781,16 @@ async function bulkDeleteTimetables() {
     if (confirm(`Are you sure you want to delete ${ids.length} selected timetable(s)?`)) {
         try {
             const updates = {};
-            ids.forEach(id => {
+            for (const id of ids) {
+                const snap = await database.ref(`timetables/${id}`).once('value');
+                const data = snap.val();
                 updates[id] = null;
-            });
+                
+                // If deleting a published draft, also delete its mirror
+                if (data && data.status === 'published' && data.baseClassId && data.baseClassId !== id) {
+                    updates[data.baseClassId] = null;
+                }
+            }
             await database.ref('timetables').update(updates);
             showToast(`${ids.length} timetables deleted!`, 'success');
             loadSavedTimetables();
@@ -3782,11 +3808,24 @@ async function bulkPublishTimetables() {
 
     try {
         const updates = {};
-        ids.forEach(id => {
-            updates[`${id}/status`] = 'published';
-            updates[`${id}/publishedAt`] = Date.now();
-            updates[`${id}/publishedBy`] = auth.currentUser.uid;
-        });
+        for (const id of ids) {
+            const snap = await database.ref(`timetables/${id}`).once('value');
+            const data = snap.val();
+            if (data) {
+                const pubData = {
+                    ...data,
+                    status: 'published',
+                    publishedAt: Date.now(),
+                    publishedBy: auth.currentUser.uid
+                };
+                updates[id] = pubData;
+                
+                const baseClassId = data.baseClassId || id;
+                if (baseClassId !== id) {
+                    updates[baseClassId] = pubData;
+                }
+            }
+        }
         await database.ref('timetables').update(updates);
         showToast(`${ids.length} timetables published!`, 'success');
         loadSavedTimetables();
@@ -3798,7 +3837,16 @@ async function bulkPublishTimetables() {
 async function confirmDeleteTimetable(classId) {
     if (confirm(`Delete timetable for ${classId}?`)) {
         try {
+            const snap = await database.ref(`timetables/${classId}`).once('value');
+            const data = snap.val();
+            
             await database.ref(`timetables/${classId}`).remove();
+            
+            // If deleting a published draft, also delete its mirror
+            if (data && data.status === 'published' && data.baseClassId && data.baseClassId !== classId) {
+                await database.ref(`timetables/${data.baseClassId}`).remove();
+            }
+            
             showToast('Timetable deleted!', 'success');
             loadSavedTimetables();
         } catch (error) {
@@ -3851,11 +3899,23 @@ async function quickPublish(classId) {
     if (!confirm('Publish this timetable?')) return;
 
     try {
-        await database.ref(`timetables/${classId}`).update({
-            status: 'published',
-            publishedAt: Date.now(),
-            publishedBy: auth.currentUser.uid
-        });
+        const snap = await database.ref(`timetables/${classId}`).once('value');
+        const data = snap.val();
+        
+        if (data) {
+            const publishData = {
+                ...data,
+                status: 'published',
+                publishedAt: Date.now(),
+                publishedBy: auth.currentUser.uid
+            };
+            await database.ref(`timetables/${classId}`).set(publishData);
+            
+            const baseClassId = data.baseClassId || classId;
+            if (baseClassId !== classId) {
+                await database.ref(`timetables/${baseClassId}`).set(publishData);
+            }
+        }
 
         showToast('Timetable published!', 'success');
         loadSavedTimetables();
@@ -3869,10 +3929,20 @@ async function unpublishTimetable(classId) {
     if (!confirm('Unpublish this timetable? It will no longer be visible to users.')) return;
 
     try {
-        await database.ref(`timetables/${classId}`).update({
-            status: 'draft',
-            updatedAt: Date.now()
-        });
+        const snap = await database.ref(`timetables/${classId}`).once('value');
+        const data = snap.val();
+        
+        if (data) {
+            await database.ref(`timetables/${classId}`).update({
+                status: 'draft',
+                updatedAt: Date.now()
+            });
+            
+            const baseClassId = data.baseClassId || classId;
+            if (baseClassId !== classId) {
+                await database.ref(`timetables/${baseClassId}`).remove();
+            }
+        }
 
         showToast('Timetable unpublished', 'success');
         loadSavedTimetables();
