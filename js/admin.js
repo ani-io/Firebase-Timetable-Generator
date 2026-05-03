@@ -3224,7 +3224,13 @@ async function exportTimetableToExcel() {
             database.ref('slots').once('value')
         ]);
 
-        const timetable = timetableSnap.val() || {};
+        let timetable = timetableSnap.val() || {};
+        
+        // Use preview data if available
+        if (window.previewTimetables && window.previewTimetables[currentTimetableClassId]) {
+            timetable = window.previewTimetables[currentTimetableClassId];
+        }
+
         const slots = slotsSnap.val() || {};
         const classData = classesData[currentTimetableClassId] || {};
         const className = classData.name || currentTimetableClassId;
@@ -3388,14 +3394,21 @@ async function exportAllTimetables() {
             database.ref('classes').once('value')
         ]);
 
-        const allTimetables = timetablesSnap.val() || {};
+        const dbTimetables = timetablesSnap.val() || {};
+        
+        // Merge with preview timetables if available
+        const allTimetables = { ...dbTimetables };
+        if (window.previewTimetables) {
+            Object.assign(allTimetables, window.previewTimetables);
+        }
+
         const slots = slotsSnap.val() || {};
         const classes = classesSnap.val() || {};
 
         const classIds = Object.keys(allTimetables).filter(id => {
-            // Filter out metadata keys
             const data = allTimetables[id];
-            return typeof data === 'object' && !['status', 'updatedAt', 'publishedAt'].every(k => k in data && Object.keys(data).length === 3);
+            // Filter out metadata-only objects by ensuring at least one slot key exists
+            return typeof data === 'object' && Object.keys(data).some(k => /^[A-Z][a-z]{2}-P\d+$/.test(k) || k.includes('-P') || k.includes('-B'));
         });
 
         if (classIds.length === 0) {
@@ -3434,7 +3447,8 @@ async function exportAllTimetables() {
         // Add a sheet for each class
         for (const classId of classIds) {
             const timetable = allTimetables[classId] || {};
-            const className = classes[classId]?.name || classId;
+            const baseId = timetable.baseClassId || classId;
+            const className = timetable.draftName || classes[baseId]?.name || classId;
 
             // Create worksheet data
             const wsData = [];
