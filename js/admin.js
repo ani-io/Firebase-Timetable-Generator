@@ -1952,19 +1952,24 @@ async function viewClassTimetable(classId) {
 
 async function clearTimetable() {
     const selectedClass = document.getElementById('timetableClass').value;
+    const emptyState = `<div class="empty-state">
+        <i class="bi bi-calendar-x"></i>
+        <h5>No Timetable Generated</h5>
+        <p>Click "Generate Timetable" to create a schedule</p>
+    </div>`;
+
+    const hideComparison = () => {
+        const p = document.getElementById('roomComparisonPanel');
+        if (p) p.style.display = 'none';
+    };
 
     if (selectedClass) {
         if (confirm(`Are you sure you want to clear the timetable for "${selectedClass}"?`)) {
             try {
                 await database.ref(`timetables/${selectedClass}`).remove();
                 showToast('Timetable cleared!', 'success');
-                document.getElementById('timetableContainer').innerHTML = `
-                    <div class="empty-state">
-                        <i class="bi bi-calendar-x"></i>
-                        <h5>No Timetable Generated</h5>
-                        <p>Click "Generate Timetable" to create a schedule</p>
-                    </div>
-                `;
+                document.getElementById('timetableContainer').innerHTML = emptyState;
+                hideComparison();
             } catch (error) {
                 showToast('Error clearing timetable: ' + error.message, 'danger');
             }
@@ -1974,13 +1979,8 @@ async function clearTimetable() {
             try {
                 await database.ref('timetables').remove();
                 showToast('All timetables cleared!', 'success');
-                document.getElementById('timetableContainer').innerHTML = `
-                    <div class="empty-state">
-                        <i class="bi bi-calendar-x"></i>
-                        <h5>No Timetable Generated</h5>
-                        <p>Click "Generate Timetable" to create a schedule</p>
-                    </div>
-                `;
+                document.getElementById('timetableContainer').innerHTML = emptyState;
+                hideComparison();
             } catch (error) {
                 showToast('Error clearing timetables: ' + error.message, 'danger');
             }
@@ -3055,8 +3055,159 @@ function showTimetableActions(classId, timetableData) {
     document.getElementById('publishBtn').style.display = 'inline-block';
     document.getElementById('exportExcelBtn').style.display = 'inline-block';
 
+    buildRoomComparisonPanel(timetableData);
+
     // Check existing status
     updateTimetableStatusBadge(classId);
+}
+
+function buildRoomComparisonPanel(timetableData) {
+    const panel = document.getElementById('roomComparisonPanel');
+    if (!panel) return;
+
+    const totalWeekSlots = Object.values(slotsData).filter(s => s.type !== 'break').length;
+
+    const roomUsage = {};
+
+    const ensureRoom = (roomId, fallbackName) => {
+        if (roomUsage[roomId]) return;
+        const rd = roomsData[roomId];
+        roomUsage[roomId] = {
+            name: rd ? escapeHtml(rd.name || roomId) : escapeHtml(fallbackName || roomId),
+            type: rd ? (rd.type || 'classroom') : 'classroom',
+            capacity: rd && rd.capacity ? rd.capacity : null,
+            theory: new Set(),
+            practical: new Set(),
+            batch: new Set()
+        };
+    };
+
+    const slotIdPattern = /^[A-Z][a-z]{2}-P\d+$/;
+    Object.entries(timetableData).forEach(([slotId, entry]) => {
+        if (!slotIdPattern.test(slotId) || !entry || typeof entry !== 'object') return;
+
+        if (entry.batchSchedule) {
+            Object.values(entry.batchSchedule).forEach(batchInfo => {
+                if (!batchInfo || !batchInfo.roomId) return;
+                ensureRoom(batchInfo.roomId, batchInfo.roomName);
+                roomUsage[batchInfo.roomId].batch.add(slotId);
+            });
+        } else if (entry.roomId) {
+            ensureRoom(entry.roomId, entry.roomName);
+            if (entry.subjectType === 'practical') {
+                roomUsage[entry.roomId].practical.add(slotId);
+            } else {
+                roomUsage[entry.roomId].theory.add(slotId);
+            }
+        }
+    });
+
+    Object.entries(roomsData).forEach(([id, r]) => {
+        ensureRoom(id, r.name);
+        if (r.type) roomUsage[id].type = r.type;
+    });
+
+    const classrooms = Object.entries(roomUsage).filter(([, r]) => r.type !== 'lab');
+    const labs = Object.entries(roomUsage).filter(([, r]) => r.type === 'lab');
+
+    const byUsageDesc = ([, a], [, b]) =>
+        (b.theory.size + b.practical.size + b.batch.size) -
+        (a.theory.size + a.practical.size + a.batch.size);
+    classrooms.sort(byUsageDesc);
+    labs.sort(byUsageDesc);
+
+    const renderRow = ([, r]) => {
+        const total = r.theory.size + r.practical.size + r.batch.size;
+        const pct = totalWeekSlots > 0 ? Math.round((total / totalWeekSlots) * 100) : 0;
+        const barClass = pct >= 70 ? 'bg-danger' : pct >= 40 ? 'bg-warning' : pct > 0 ? 'bg-success' : 'bg-secondary';
+
+        const days = new Set();
+        [...r.theory, ...r.practical, ...r.batch].forEach(sid => days.add(sid.split('-')[0]));
+
+        const allSlots = [...r.theory, ...r.practical, ...r.batch].join(', ') || 'Not used';
+
+        const badges = [
+            r.theory.size > 0 ? `<span class="badge bg-primary me-1">Theory ×${r.theory.size}</span>` : '',
+            r.practical.size > 0 ? `<span class="badge bg-info text-dark me-1">Lab ×${r.practical.size}</span>` : '',
+            r.batch.size > 0 ? `<span class="badge bg-success me-1">Batch ×${r.batch.size}</span>` : '',
+            total === 0 ? '<span class="text-muted small">Unused</span>' : ''
+        ].join('');
+
+        return `<tr ${total === 0 ? 'class="table-secondary"' : ''}>
+            <td>
+                <strong>${r.name}</strong>
+                ${r.capacity ? `<br><small class="text-muted">Cap: ${escapeHtml(String(r.capacity))}</small>` : ''}
+            </td>
+            <td>${badges}</td>
+            <td><small>${days.size > 0 ? [...days].join(', ') : '–'}</small></td>
+            <td>
+                <div class="d-flex align-items-center gap-1">
+                    <div class="progress flex-grow-1" style="height:8px;" title="${escapeHtml(allSlots)}">
+                        <div class="progress-bar ${barClass}" style="width:${pct}%"></div>
+                    </div>
+                    <small class="text-nowrap">${pct}%</small>
+                </div>
+            </td>
+        </tr>`;
+    };
+
+    const usedClassrooms = classrooms.filter(([, r]) => r.theory.size + r.practical.size + r.batch.size > 0).length;
+    const usedLabs = labs.filter(([, r]) => r.theory.size + r.practical.size + r.batch.size > 0).length;
+
+    const tableHead = `<thead class="table-light">
+        <tr><th>Room</th><th>Assigned slots</th><th>Days active</th><th>Utilisation</th></tr>
+    </thead>`;
+
+    panel.style.display = 'block';
+    panel.innerHTML = `
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
+                <span><i class="bi bi-building-fill-gear me-2"></i><strong>Room Allocation Comparison</strong></span>
+                <small class="text-white-50">Week total: ${totalWeekSlots} usable slots</small>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info alert-sm py-2 mb-3 small">
+                    <strong>Allocation basis — </strong>
+                    <span class="badge bg-primary">Theory</span> First available classroom (non-lab) in DB iteration order; no capacity or proximity preference. &nbsp;
+                    <span class="badge bg-info text-dark">Practical</span> Lab pre-assigned on the subject by admin; solver only checks availability. &nbsp;
+                    <span class="badge bg-success">Batch</span> Per-batch lab from subject config; falls back to any free room if no lab assigned.
+                </div>
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <div class="card h-100 border-primary">
+                            <div class="card-header bg-primary text-white d-flex justify-content-between py-2">
+                                <span><i class="bi bi-building me-1"></i> Classrooms</span>
+                                <span class="badge bg-light text-primary">${usedClassrooms} / ${classrooms.length} used</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        ${tableHead}
+                                        <tbody>${classrooms.length ? classrooms.map(renderRow).join('') : '<tr><td colspan="4" class="text-center text-muted">No classrooms defined</td></tr>'}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card h-100 border-success">
+                            <div class="card-header bg-success text-white d-flex justify-content-between py-2">
+                                <span><i class="bi bi-lightning-fill me-1"></i> Lab Rooms</span>
+                                <span class="badge bg-light text-success">${usedLabs} / ${labs.length} used</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        ${tableHead}
+                                        <tbody>${labs.length ? labs.map(renderRow).join('') : '<tr><td colspan="4" class="text-center text-muted">No lab rooms defined</td></tr>'}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
 }
 
 // Export timetable to Excel using SheetJS (with batch-specific sheets)
