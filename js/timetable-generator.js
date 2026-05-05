@@ -225,8 +225,8 @@ async function generateTimetable() {
                 
                 if (sub.type === 'batch-group') {
                     const groupRooms = {};
-                    const usedGroupRooms = new Set();
-
+                    const usedTheoryRooms = new Set();
+                    
                     for (const item of sub.items) {
                         if (item.labId) {
                             for (let x = 0; x < item.duration; x++) {
@@ -234,14 +234,10 @@ async function generateTimetable() {
                             }
                             groupRooms[item.batch] = item.labId;
                         } else {
-                            // Restrict fallback to lab-type rooms so a batch practical
-                            // never silently land in a classroom when no lab is pre-assigned.
-                            const labRooms = Object.entries(rooms)
-                                .filter(([, r]) => r.type === 'lab')
-                                .map(([id]) => id);
+                            const crs = Object.entries(rooms).map(([id]) => id);
                             let found = null;
-                            for (const rid of labRooms) {
-                                if (usedGroupRooms.has(rid)) continue;
+                            for (const rid of crs) {
+                                if (usedTheoryRooms.has(rid)) continue;
                                 let ok = true;
                                 for (let x = 0; x < item.duration; x++) {
                                     if (rMap[rid]?.[`${dp}-P${p + x}`]) { ok = false; break; }
@@ -253,7 +249,7 @@ async function generateTimetable() {
                             }
                             if (!found) return null;
                             groupRooms[item.batch] = found;
-                            usedGroupRooms.add(found);
+                            usedTheoryRooms.add(found);
                         }
                     }
                     return groupRooms;
